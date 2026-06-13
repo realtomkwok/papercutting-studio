@@ -1,0 +1,1 @@
+{"root":["./src/main.tsx","./src/app/app.tsx","./src/app/canvashost.tsx","./src/core/foldconfig.ts","./src/core/geometry.test.ts","./src/core/geometry.ts","./src/engine/editorengine.ts","./src/engine/api.ts"],"version":"5.9.3"}
