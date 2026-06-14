@@ -25,15 +25,26 @@ export type EngineTool =
 
 export type ExportFormat = 'svg' | 'png';
 
-/** Paper-shaders props that re-bake the colour map (full set lives in `@paper-design/shaders` —
- *  this is just the subset the UI panel exposes; expand as M5 lands). */
+/** Paper-shaders props that re-bake the colour map (M5). Mirrors the tunable subset of the
+ *  `@paper-design/shaders` paper-texture params; the configurator panel exposes all of these and a
+ *  full set round-trips as JSON. Every field optional so partial updates merge over the defaults
+ *  (`DEFAULT_PAPER_STOCK`). The decorative `folds`/`foldCount` are deliberately omitted — our creases
+ *  are geometric (gotcha §10.8). All numeric knobs are 0..1. */
 export interface PaperStockProps {
+  /** Base sheet colour (the paper). */
   readonly colorBack?: string;
+  /** Fibre/noise overlay colour. */
+  readonly colorFront?: string;
   readonly fiber?: number;
   readonly fiberSize?: number;
   readonly crumples?: number;
+  readonly crumpleSize?: number;
   readonly drops?: number;
+  /** Pixel-noise roughness of the shader pattern (not the Three.js material roughness). */
   readonly roughness?: number;
+  readonly contrast?: number;
+  /** Pattern seed (0..1; scaled to the shader's 0..1000 internally). */
+  readonly seed?: number;
 }
 
 export type EngineEvent =

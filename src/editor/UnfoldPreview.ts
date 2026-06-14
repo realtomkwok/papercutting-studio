@@ -26,12 +26,20 @@ export const BAKE_COLORS: PreviewColors = { paper: '#ffffff', hole: '#000000' };
 /** Iconic look for the visible preview: red sheet, holes punched through to the page. */
 export const PREVIEW_COLORS: PreviewColors = { paper: '#c8102e', hole: '#faf7f2' };
 
+/** Source of the baked paper texture (the colour-map canvas, full unit square) for the visible
+ *  previews. Returns null until the first paper-shaders bake lands; then the paper sheet is painted
+ *  with the texture instead of a flat colour (M5 — paper stock in the 2D view). */
+export type PaperTextureSource = () => HTMLCanvasElement | null;
+
 export class UnfoldPreview {
   private readonly ctx: CanvasRenderingContext2D;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly colors: PreviewColors = BAKE_COLORS,
+    /** When set and it returns a canvas, the paper is painted with that texture (visible previews).
+     *  The hidden alphaMap bake leaves this unset so its sheet stays pure white (dev-spec §5.1). */
+    private readonly paperTexture?: PaperTextureSource,
   ) {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('UnfoldPreview: 2D context unavailable on preview canvas');
@@ -54,8 +62,15 @@ export class UnfoldPreview {
     // Background (= hole colour), then the paper sheet filling the whole canvas in the unit frame.
     ctx.fillStyle = this.colors.hole;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = this.colors.paper;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Paper sheet: the baked paper texture if available (both the texture canvas and this preview
+    // cover the full unit square, so a stretched drawImage keeps creases aligned), else a flat colour.
+    const tex = this.paperTexture?.();
+    if (tex) {
+      ctx.drawImage(tex, 0, 0, canvas.width, canvas.height);
+    } else {
+      ctx.fillStyle = this.colors.paper;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
 
     // Removed region: all reflected contours in ONE path, filled even-odd, so island-holes inside a
     // cut (paper that survived within a removed area) punch back through to the paper colour.

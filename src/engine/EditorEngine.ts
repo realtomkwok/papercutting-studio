@@ -22,9 +22,12 @@ import { foldConfigs, symmetricalTriangle, type FoldConfig } from '../core/foldC
 import { EditorModel } from '../editor/EditorModel';
 import { WedgeEditor } from '../editor/WedgeEditor';
 import { UnfoldPreview, PREVIEW_COLORS } from '../editor/UnfoldPreview';
+import type { UnfoldResult } from '../core/unfold';
 import { CutCompositor } from '../editor/CutCompositor';
 import { AlphaMapBaker } from '../bridge/AlphaMapBaker';
+import { PaperTextureBaker } from '../bridge/PaperTextureBaker';
 import { FoldRig } from '../scene/FoldRig';
+import { generateCreases } from '../core/unfold';
 import { loadTemplateInto } from '../templates';
 
 /** Total unfold duration for `playUnfold`, scaled to hinge count (~2.5 s for the 8-panel case, dev-spec §6.2). */
@@ -54,11 +57,13 @@ export class PaperCuttingEngine implements EditorEngine {
   private visiblePreview: UnfoldPreview | null = null;
   private compositor: CutCompositor | null = null;
   private baker: AlphaMapBaker | null = null; // M3 bridge: bake canvas → THREE alphaMap mesh
+  private paperBaker: PaperTextureBaker | null = null; // M5: paper-shaders colour map + crease bump
   private foldRig: FoldRig | null = null; // M4: nested-hinge rig driven by the unfold scrubber
   private controls: OrbitControls | null = null; // M4: orbit the 3D paper in the unfold view
   private fold: FoldConfig = symmetricalTriangle;
   private currentTool: EngineTool = 'freehand';
   private unsubPaths: Unsubscribe | null = null;
+  private lastUnfold: UnfoldResult | null = null; // cached so a re-bake can repaint the 2D previews
 
   // M4 3D loop: a RAF loop runs only while the unfold view is shown (orbit damping + play animation).
   private mode: EngineMode = 'draw';
@@ -71,8 +76,9 @@ export class PaperCuttingEngine implements EditorEngine {
       emit: <E extends EngineEvent>(event: E, payload: EngineEventPayload[E]) =>
         this.emit(event, payload),
       onUnfold: (result) => {
+        this.lastUnfold = result;
         this.preview?.render(result); // hidden bake (white/black → alphaMap, M3)
-        this.visiblePreview?.render(result); // visible side preview (red sheet, open holes)
+        this.visiblePreview?.render(result); // visible side preview (paper texture, open holes)
         // M3 bridge: the bake canvas just changed → re-upload it and repaint the 3D view.
         this.baker?.update();
         this.render3d();
@@ -182,10 +188,13 @@ export class PaperCuttingEngine implements EditorEngine {
       committed: (batches) => this.compositor!.committed(batches),
     });
 
-    this.editor = new WedgeEditor(this.paperScope!, this.model, this.fold);
+    // The 2D editor + side preview paint their paper with the M5 paper-shaders bake (a lazy closure —
+    // the baker is created just below; it seeds a flat colour immediately so the closure is safe).
+    const paperTex = () => this.paperBaker?.getMapCanvas() ?? null;
+    this.editor = new WedgeEditor(this.paperScope!, this.model, this.fold, paperTex);
     this.editor.setTool(this.currentTool);
-    this.preview = new UnfoldPreview(this.bakeCanvas!);
-    this.visiblePreview = new UnfoldPreview(this.previewCanvas!, PREVIEW_COLORS);
+    this.preview = new UnfoldPreview(this.bakeCanvas!); // hidden alphaMap bake stays solid white
+    this.visiblePreview = new UnfoldPreview(this.previewCanvas!, PREVIEW_COLORS, paperTex);
 
     // M3 bridge: wrap the bake canvas as a THREE alphaMap material. M4 fold rig: build one panel per
     // symmetry copy, all sharing that material, nested in hinge groups. The flat `baker.mesh` is no
@@ -194,6 +203,19 @@ export class PaperCuttingEngine implements EditorEngine {
     this.foldRig = new FoldRig(this.fold, this.baker.getMaterial());
     this.scene!.add(this.foldRig.group);
     this.foldRig.setProgress(this.unfoldProgress);
+
+    // M5 paper-shaders bake: render the paper texture once into the shared material's colour `map`,
+    // compositing crease bump + tint from the fold's crease star. Async (its own WebGL RAF), so repaint
+    // the 3D view on completion. Seeds a flat colour immediately so the mesh never shows black.
+    this.paperBaker = new PaperTextureBaker(this.baker.getMaterial(), el, {
+      onBaked: () => {
+        this.render3d(); // repaint the 3D paper with the new colour/bump map
+        this.editor?.redrawPaper(); // 2D editor wedge picks up the new texture
+        if (this.lastUnfold) this.visiblePreview?.render(this.lastUnfold); // side preview too
+      },
+    });
+    this.paperBaker.setCreases(generateCreases(this.fold));
+    void this.paperBaker.bake();
 
     // OrbitControls: spin/zoom the unfolded paper. Enabled only in the 3D view (toggled in setMode).
     this.controls = new OrbitControls(this.camera!, this.viewCanvas!);
@@ -267,6 +289,7 @@ export class PaperCuttingEngine implements EditorEngine {
     this.visiblePreview?.dispose();
     this.controls?.dispose();
     this.foldRig?.dispose();
+    this.paperBaker?.dispose();
     this.baker?.dispose();
     this.editor = null;
     this.preview = null;
@@ -274,6 +297,7 @@ export class PaperCuttingEngine implements EditorEngine {
     this.compositor = null;
     this.controls = null;
     this.foldRig = null;
+    this.paperBaker = null;
     this.baker = null;
     this.renderer?.dispose();
     this.paperScope?.project?.clear();
@@ -368,6 +392,11 @@ export class PaperCuttingEngine implements EditorEngine {
       this.scene.add(this.foldRig.group);
       this.foldRig.setProgress(this.unfoldProgress);
     }
+    // The crease star follows the wedge angle — refresh it and re-bake the colour/bump composite.
+    if (this.paperBaker) {
+      this.paperBaker.setCreases(generateCreases(fold));
+      void this.paperBaker.bake(); // no props → keep current stock, recomposite the new crease star
+    }
   }
 
   setUnfoldProgress(t: number): void {
@@ -383,8 +412,10 @@ export class PaperCuttingEngine implements EditorEngine {
     if (this.mode === 'unfold3d') this.startLoop();
   }
 
-  setPaperStock(_props: PaperStockProps): void {
-    // TODO: M5 wires the paper-shaders bake.
+  setPaperStock(props: PaperStockProps): void {
+    // Re-bake the paper-shaders colour map + crease composite for the new stock; the baker repaints
+    // the 3D view via its onBaked callback when the (async) render completes.
+    void this.paperBaker?.bake(props);
   }
 
   undo(): void {

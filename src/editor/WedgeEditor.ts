@@ -15,6 +15,7 @@ import type { FoldConfig } from '../core/foldConfig';
 import { boundaryPointAtAngle, type Point } from '../core/geometry';
 import { makeStamp, type StampKind } from '../core/stamps';
 import type { EditorModel } from './EditorModel';
+import type { PaperTextureSource } from './UnfoldPreview';
 import type { EngineTool } from '../engine/api';
 
 const STAMP_KINDS: Record<string, StampKind> = {
@@ -59,6 +60,9 @@ export class WedgeEditor {
     private readonly scope: paper.PaperScope,
     private readonly model: EditorModel,
     private fold: FoldConfig,
+    /** Baked paper texture (M5). When it returns a canvas, the wedge sheet is painted with it instead
+     *  of flat red, so the 2D editor reflects the chosen paper stock. */
+    private readonly paperTexture?: PaperTextureSource,
   ) {
     this.scope.activate();
     this.staticLayer = new paper.Layer();
@@ -96,6 +100,12 @@ export class WedgeEditor {
   setFold(fold: FoldConfig): void {
     this.fold = fold;
     this.relayout();
+  }
+
+  /** Re-paint the wedge sheet after a paper-shaders re-bake (the texture canvas changed in place, so
+   *  the Paper.js raster must be recreated from it). Static layer only; cuts/pending are untouched. */
+  redrawPaper(): void {
+    this.drawStatic();
   }
 
   // ── coordinate transform (frame → scale + y-flip → view rotation) ─────────
@@ -163,7 +173,22 @@ export class WedgeEditor {
     });
     wedge.strokeColor = new paper.Color(0.4, 0.05, 0.1);
     wedge.strokeWidth = 1.5;
-    wedge.fillColor = PAPER_FILL; // the paper sheet is red (matches the final design)
+
+    // Paper sheet fill: the baked paper texture (cover-fit + clipped to the wedge) if available, else
+    // flat red. The raster reads the texture canvas at creation, so redrawPaper() recreates it.
+    const tex = this.paperTexture?.();
+    if (tex && tex.width > 0) {
+      const raster = new paper.Raster(tex);
+      const b = wedge.bounds;
+      const cover = Math.max(b.width / raster.width, b.height / raster.height);
+      raster.scale(cover);
+      raster.position = b.center;
+      const clip = wedge.clone();
+      const group = new paper.Group([clip, raster]);
+      group.clipped = true; // first child (the wedge clone) masks the raster to the wedge shape
+    } else {
+      wedge.fillColor = PAPER_FILL; // the paper sheet is red (matches the final design)
+    }
 
     // Labels at the mid-radius of each folded edge and just outside the open edge.
     const startMid = boundaryPointAtAngle(this.fold.wedgeStart, 0.25);

@@ -44,6 +44,8 @@ export interface ToolbarProps {
   readonly onLoadTemplate: () => void;
   readonly onUnfoldProgress: (t: number) => void;
   readonly onPlayUnfold: () => void;
+  /** Open the paper-texture configurator (M5). */
+  readonly onOpenPaperConfig: () => void;
 }
 
 const bar: CSSProperties = {
@@ -126,6 +128,14 @@ export function Toolbar(props: ToolbarProps) {
       <span style={sep} />
       <button type="button" style={btn(false)} onClick={props.onLoadTemplate} title="Load the test-circles template">
         Load circles
+      </button>
+      <button
+        type="button"
+        style={btn(false)}
+        onClick={props.onOpenPaperConfig}
+        title="Open the paper-texture configurator"
+      >
+        🎨 Paper texture
       </button>
       <button
         type="button"

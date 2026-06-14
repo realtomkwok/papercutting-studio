@@ -10,8 +10,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CanvasHost } from './CanvasHost';
 import { Toolbar } from './Toolbar';
+import { PaperStockConfigurator } from './PaperStockConfigurator';
 import { PaperCuttingEngine } from '../engine/EditorEngine';
-import type { EngineMode, EngineTool } from '../engine/api';
+import type { EngineMode, EngineTool, PaperStockProps } from '../engine/api';
 
 export function Studio() {
   const engine = useMemo(() => new PaperCuttingEngine(), []);
@@ -23,6 +24,9 @@ export function Studio() {
   const [rotation, setRotation] = useState(0);
   const [mode, setModeState] = useState<EngineMode>('draw');
   const [unfoldProgress, setUnfoldProgress] = useState(1);
+  // Mirrors the M5 paper stock the engine bakes (seeds the configurator); {} = engine defaults.
+  const [paperStock, setPaperStock] = useState<PaperStockProps>({});
+  const [paperConfigOpen, setPaperConfigOpen] = useState(false);
 
   useEffect(() => {
     const unsubs = [
@@ -73,10 +77,20 @@ export function Studio() {
         onLoadTemplate={() => engine.loadTemplate('test-circles')}
         onUnfoldProgress={(t) => engine.setUnfoldProgress(t)}
         onPlayUnfold={() => engine.playUnfold()}
+        onOpenPaperConfig={() => setPaperConfigOpen(true)}
       />
       <main style={{ flex: 1, position: 'relative', minHeight: 0 }}>
         <CanvasHost engine={engine} />
       </main>
+      <PaperStockConfigurator
+        open={paperConfigOpen}
+        initial={paperStock}
+        onApply={(props) => {
+          setPaperStock(props);
+          engine.setPaperStock(props);
+        }}
+        onClose={() => setPaperConfigOpen(false)}
+      />
     </div>
   );
 }
