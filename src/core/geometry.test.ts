@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   applyMat,
   generateSymmetricalTriangleCopies,
+  pointInPolygon,
   reflectionMatrix,
   rotationMatrix,
   snapPoint,
+  type Point,
 } from './geometry';
 
 const closeTo = (a: number, b: number) => expect(a).toBeCloseTo(b, 12);
@@ -12,6 +14,32 @@ const pointClose = (got: { x: number; y: number }, want: { x: number; y: number 
   closeTo(got.x, want.x);
   closeTo(got.y, want.y);
 };
+
+describe('pointInPolygon', () => {
+  const square: Point[] = [
+    { x: 0, y: 0 },
+    { x: 0.4, y: 0 },
+    { x: 0.4, y: 0.4 },
+    { x: 0, y: 0.4 },
+  ];
+  it('accepts an interior point and rejects an exterior one', () => {
+    expect(pointInPolygon({ x: 0.2, y: 0.2 }, square)).toBe(true);
+    expect(pointInPolygon({ x: 0.5, y: 0.2 }, square)).toBe(false);
+    expect(pointInPolygon({ x: 0.2, y: 0.6 }, square)).toBe(false);
+  });
+  it('handles a concave (L-shaped) polygon', () => {
+    const ell: Point[] = [
+      { x: 0, y: 0 },
+      { x: 0.4, y: 0 },
+      { x: 0.4, y: 0.2 },
+      { x: 0.2, y: 0.2 },
+      { x: 0.2, y: 0.4 },
+      { x: 0, y: 0.4 },
+    ];
+    expect(pointInPolygon({ x: 0.1, y: 0.3 }, ell)).toBe(true); // in the left arm
+    expect(pointInPolygon({ x: 0.3, y: 0.3 }, ell)).toBe(false); // in the notch
+  });
+});
 
 describe('reflectionMatrix', () => {
   it('R(0°) reflects (a,b) → (a,−b)', () => {

@@ -207,7 +207,7 @@ FOLD_INTRO → DRAW ⇄ CUT_PREVIEW → UNFOLDING → RESULT
 ```
 
 - DRAW and CUT_PREVIEW share the editor; CUT_PREVIEW just toggles the rendering of paths as removed material plus the side unfold preview.
-- RESULT offers: orbit, "fold again", "back to editing", export PNG/SVG of the 2D pattern.
+- RESULT offers: orbit, "fold again", "back to editing", export PNG/SVG of the 2D pattern, print/PDF export of the instruction sheet (M7).
 
 ---
 
@@ -273,6 +273,15 @@ Each milestone lists its **deliverable** (what exists at the end), **tech** (lib
 - **Deliverable:** fold-intro animation (square → wedge before Draw), lighting + ground shadow, residual-crease relax, PNG/SVG export of the 2D pattern, full state-machine wiring (`FOLD_INTRO → DRAW ⇄ CUT_PREVIEW → UNFOLDING → RESULT`), Figma Make chrome wired through `wireUi.tsx`.
 - **Tech:** Three.js lights / `ShadowMaterial` / `OrbitControls`; a small FSM (XState or hand-rolled); export via canvas `toBlob` (PNG) and Paper.js `exportSVG`.
 - **Test:** Playwright end-to-end happy path — load template → edit → unfold → export, asserting each transition and a valid exported file. Regenerate the chrome in Figma Make and confirm only `wireUi.tsx` needs touching (the separation contract holds).
+
+### M7 — Print export
+- **Deliverable:** a single-page printable instruction sheet the user can take to the table with real paper and scissors. Three sections on the page:
+  1. **To-scale fold template** — the wedge cut pattern rendered at the design's actual paper size (e.g. 12 cm for Design 18), with fold-edge labels ("folded edge — cuts will mirror" / "open edge") and a printed scale bar. The user folds real paper to match the wedge shape, places it over the template, traces the cuts, and cuts through all layers.
+  2. **Fold-sequence diagram** — small thumbnail steps generated from `foldConfig` (one box per fold line, annotated with fold order and direction: valley/mountain), so the user knows how to fold before cutting.
+  3. **Expected result preview** — the 2D baked canvas (full unfolded pattern) at a reduced size, as a reference to check the finished piece against.
+  Wired to a "Print instructions" button in the RESULT stage, alongside the existing PNG/SVG export. `exportPattern` in `api.ts` extended: `format: 'svg' | 'png' | 'pdf'`.
+- **Tech:** browser-native `window.print()` with a `@media print` stylesheet applied to a dedicated `PrintLayout` component (no extra runtime dependencies). The wedge template is the Paper.js `exportSVG` output from M6, scaled to physical dimensions using the paper size stored in `foldConfig`. Fold-sequence thumbnails are small inline SVGs drawn from `foldConfig.foldLines`. The result preview is `canvas.toDataURL()` from the bake canvas. `PrintLayout` is a React component under `src/app/`; it is hidden on-screen and only visible in print media. If browser print proves insufficiently controllable for scale-accuracy, `jsPDF` is the fallback (decision at implementation time, no API change).
+- **Test:** Playwright — click "Print instructions", intercept the print dialog (or assert `window.print` was called), and capture the rendered `PrintLayout` as an image; diff it against a stored reference. Assert the SVG template contains a scale-bar rect of the correct declared width. Manual acceptance: fold a 12 cm square piece of red paper following the printout, cut along the template, unfold — the resulting pattern must visually match the digital preview.
 
 ---
 

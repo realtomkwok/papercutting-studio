@@ -68,6 +68,95 @@ export function multiplyMat(a: Mat2, b: Mat2): Mat2 {
   ];
 }
 
+export function determinant(m: Mat2): number {
+  return m[0][0] * m[1][1] - m[0][1] * m[1][0];
+}
+
+const IDENTITY: Mat2 = [
+  [1, 0],
+  [0, 1],
+];
+
+/**
+ * Rotation component of an orthogonal matrix, in degrees, normalised to [0, 360).
+ * For a pure rotation this is the rotation angle. For a reflection R(φ) it returns 2φ — the
+ * "rotation modulo mirror" the `CopyTransform.rotationDeg` field documents. Advisory only;
+ * the geometry is carried by `mat`. */
+function rotationComponentDeg(m: Mat2): number {
+  let deg = Math.atan2(m[1][0], m[0][0]) / DEG;
+  deg = ((deg % 360) + 360) % 360;
+  // Tidy float fuzz so labels read as 0/90/180/270 rather than 89.9999999.
+  return Math.round(deg * 1e6) / 1e6;
+}
+
+/**
+ * Endpoint where the ray from the origin at `angleDeg` crosses the boundary of the square of
+ * half-extent `half` (0.5 for the unit square). Used to terminate crease spokes at the paper edge.
+ */
+export function boundaryPointAtAngle(angleDeg: number, half: number): Point {
+  const t = angleDeg * DEG;
+  const c = Math.cos(t);
+  const s = Math.sin(t);
+  const scale = half / Math.max(Math.abs(c), Math.abs(s));
+  return { x: c * scale, y: s * scale };
+}
+
+/** Whether `p` lies within the wedge θ ∈ [startDeg, endDeg]. The origin is on every wedge
+ *  boundary, so it counts as inside. Tolerant by ~1e-9 on both bounds. */
+export function pointInWedge(p: Point, startDeg: number, endDeg: number): boolean {
+  if (p.x === 0 && p.y === 0) return true;
+  let a = Math.atan2(p.y, p.x) / DEG;
+  if (a < 0) a += 360;
+  return a >= startDeg - 1e-9 && a <= endDeg + 1e-9;
+}
+
+/** Even–odd ray-cast point-in-polygon test (polygon treated as implicitly closed). Used by the
+ *  erase tool to pick which cut a click landed in once cuts render as one merged region. */
+export function pointInPolygon(p: Point, poly: readonly Point[]): boolean {
+  let inside = false;
+  const n = poly.length;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const a = poly[i]!;
+    const b = poly[j]!;
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+/**
+ * Generate copy transforms by **reflect-and-double** (dev-spec §2.2): start from the identity
+ * wedge, then for each fold angle reflect every existing copy across that line and append the
+ * images, doubling the count each pass.
+ *
+ * Pass the fold-line angles in **reverse fold order** (last physical fold first) — unfolding
+ * opens the innermost fold first. For the symmetrical triangle (folds 0°, 90°, 45°) pass
+ * [45, 90, 0] to get the 8 transforms of D₄.
+ *
+ * Each reflection flips `mirror` (parity). This is the power-of-two construction; non-power-of-two
+ * (cone) folds need the direct construction of §2.2b and are out of scope until their angles land.
+ */
+export function generateCopies(foldAnglesReverseOrder: readonly number[]): readonly CopyTransform[] {
+  let copies: CopyTransform[] = [
+    { id: 'I', rotationDeg: 0, mirror: false, mat: IDENTITY },
+  ];
+  for (const angle of foldAnglesReverseOrder) {
+    const R = reflectionMatrix(angle);
+    const reflected = copies.map((c): CopyTransform => {
+      const mat = multiplyMat(R, c.mat);
+      return {
+        id: `${c.id}·R${angle}`,
+        rotationDeg: rotationComponentDeg(mat),
+        mirror: !c.mirror,
+        mat,
+      };
+    });
+    copies = copies.concat(reflected);
+  }
+  return copies;
+}
+
 /**
  * Snap a point to its nearest fold line (or outer-square edge) if within ε.
  *

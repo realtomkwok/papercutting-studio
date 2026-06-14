@@ -66,6 +66,7 @@ Build order is sequential except M2.5 ‖ M3. Each milestone's acceptance criter
 - **M4** Fold rig: nested hinges from `foldConfig`, single `progress ∈ [0,1]` scrubber, eased ~10%-overlapping segments.
 - **M5** Paper Shaders bake: `PaperTextureBaker` + crease-bump composite (worked-example Stage 4).
 - **M6** Polish: fold-intro, lighting, residual-crease relax, PNG/SVG export, full FSM, Figma Make chrome wired through `wireUi.tsx`.
+- **M7** Print export: printable instruction sheet — to-scale fold template (at physical paper size), fold-sequence diagram from `foldConfig`, expected-result preview. Browser `window.print()` + `@media print` stylesheet; `jsPDF` fallback if scale control requires it. `exportPattern` extended to `'svg' | 'png' | 'pdf'`.
 
 ## Build, test, run
 

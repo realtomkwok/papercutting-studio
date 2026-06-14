@@ -17,9 +17,15 @@ export default [
         window: 'readonly',
         document: 'readonly',
         console: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        Blob: 'readonly',
         HTMLElement: 'readonly',
         HTMLDivElement: 'readonly',
         HTMLCanvasElement: 'readonly',
+        CanvasRenderingContext2D: 'readonly',
+        CSSStyleDeclaration: 'readonly',
+        ResizeObserver: 'readonly',
       },
     },
     plugins: {
@@ -30,6 +36,10 @@ export default [
     rules: {
       ...tseslint.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },

@@ -135,7 +135,7 @@ interface EditorEngine {
   playUnfold(): void;
   setPaperStock(props: PaperStockProps): void; // paper-shaders params → triggers re-bake
   undo(): void; redo(): void;
-  exportPattern(format: 'svg' | 'png'): Promise<Blob>;
+  exportPattern(format: 'svg' | 'png' | 'pdf'): Promise<Blob>; // 'pdf' → print instruction sheet (M7)
 
   // events (engine → UI), single subscription point
   on(event: EngineEvent, cb: (payload: any) => void): Unsubscribe;
