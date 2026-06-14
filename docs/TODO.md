@@ -19,3 +19,20 @@ Items deferred from milestone work, to revisit before the milestone is considere
   subtracts from the pending design, so an eraser stroke over empty paper (or over already-committed
   cuts) should be a **no-op**, never adding a pending `subtract` op that lingers. Guard
   `EditorModel.erase` so a subtract is dropped when it removes nothing from the current pending region.
+
+## M5 — paper-shaders bake
+
+- [ ] **Editor wedge texture is cover-fit, not seam-aligned.** `WedgeEditor.drawStatic` paints the
+  baked colour map as a clipped raster scaled to *cover* the wedge bounding box, so the crease tint
+  baked into the texture doesn't line up with the wedge's actual fold edges. Cosmetically fine (it
+  reads as textured paper), but to align it the raster should map the **full unit square** through the
+  same `unitToView` transform (accounting for the y-flip) and be clipped to the wedge.
+
+- [ ] **`setPaperStock` merges partial props over defaults, not over the current stock.**
+  `resolvePaperStock` fills missing fields from `DEFAULT_PAPER_STOCK`, so a partial update would reset
+  the untouched knobs. Harmless today (the configurator always sends the full set), but if any other
+  caller sends a partial stock it should merge over the engine's current stock instead.
+
+- [ ] **Normal map from the bump canvas (deferred per spec).** v1 uses a `bumpMap` only. For sharper
+  crease relief under raking light, derive a normal map (Sobel on the combined bump canvas) — see
+  worked-example Stage 4.

@@ -72,7 +72,9 @@ Creases are what make the unfolded paper read as *having been folded*. Three lay
 Skip normal-map generation in v1; bump is sufficient at this scale. If upgrading later, derive a normal map from the combined bump canvas (Sobel filter).
 
 ### Stage 5 — Paper texture bake (paper-shaders)
-Per main spec §5.2: render `<PaperTexture>` once offscreen (red stock for this design: `colorBack ≈ #c8102e`, fibre on, **its `folds` prop = 0** — our creases come from Stage 4, geometrically aligned, not random noise), snapshot to a 2D canvas, use as `map`.
+Per main spec §5.2: render the paper texture once offscreen (red stock for this design: `colorBack ≈ #c8102e`, fibre on, **its `folds` prop = 0** — our creases come from Stage 4, geometrically aligned, not random noise), snapshot to a 2D canvas, use as `map`.
+
+*Delivered (M5):* via the core `@paper-design/shaders` `ShaderMount` directly (not the React `<PaperTexture>`), so the engine stays UI-free. The snapshot waits for a non-transparent frame before reading (black-frame guard). The same baked colour map is also reused in the 2D view — the editor wedge (clipped raster) and the side preview — so the 2D editor shows the chosen stock, not just the 3D mesh. Stock is tuned in `app/PaperStockConfigurator.tsx` (live preview + full controls + JSON export/import) and applied through `setPaperStock`.
 
 ### Stage 6 — Mesh
 - Eight triangular panels (one per wedge copy), built from `THREE.Shape`, UVs mapping each panel to its 45° slice of the unit square. The single full-square `map`/`alphaMap`/`bumpMap` then texture all panels with no per-panel work.

@@ -95,7 +95,8 @@ src/
     UnfoldPreview.ts   // hidden/side canvas: renders full 8-wedge pattern
   bridge/
     AlphaMapBaker.ts   // unfolded pattern → 2D canvas → THREE.CanvasTexture (alphaMap)
-    PaperTextureBaker.ts // paper-shaders output → snapshot canvas → THREE.CanvasTexture (map)
+    PaperTextureBaker.ts // paper-shaders output → snapshot canvas → THREE.CanvasTexture (map + crease bump/tint)
+    paperStock.ts      // pure: stock resolution, shader uniform mapping, crease-ridge profile (no DOM — unit-test this)
   scene/               // Three.js layer
     PaperMesh.ts       // panel geometry, UV mapping, materials
     FoldRig.ts         // nested hinge groups + fold/unfold animation
@@ -142,9 +143,11 @@ Paper Shaders renders into **its own canvas with its own WebGL context**; it is 
 3. Wrap the snapshot in `THREE.CanvasTexture` → `material.map`. Set `colorSpace = THREE.SRGBColorSpace`.
 4. Optional realism: derive a luminance-based bump map from the same snapshot → `material.bumpMap`, small `bumpScale`, so crumples respond to scene lighting (the baked colour map alone won't).
 
-Expose the shader props in a small "paper stock" settings panel; re-bake on change (it's a one-off cost, not per-frame).
+Expose the shader props in a "paper stock" configurator; re-bake on change (it's a one-off cost, not per-frame). **Delivered as `app/PaperStockConfigurator.tsx`** — a modal with a *live* `ShaderMount` preview (cheap per-slider, no bake/snapshot), the full tunable control set (paper + fibre colours, fibre, fibre size, crumples, crumple size, speckle/drops, roughness, contrast, seed), preset swatches, and JSON export/import so a refined stock round-trips. "Apply" pushes the stock through `setPaperStock(props)`, which runs the one-off bake. The pure uniform mapping (`bridge/paperStock.ts`) forces `folds`/`foldCount` off (gotcha §10.8) and is unit-tested headless.
 
-If the app is vanilla (non-React), use the core `@paper-design/shaders` package's shader-mount equivalent; same bake procedure.
+Use the core `@paper-design/shaders` `ShaderMount` directly (vanilla, no React component) so the engine stays UI-free; same bake procedure. The mount renders async (its own resize observer + RAF), so the snapshot waits for a non-transparent frame before `drawImage` (the black-frame guard).
+
+**The baked colour map is reused in the 2D view, not just 3D:** the engine exposes it (`PaperTextureBaker.getMapCanvas()`) so the Paper.js editor wedge (a clipped raster) and the side unfold preview paint their "paper" with the same texture — the 2D editor now reflects the chosen stock. Only the hidden alphaMap bake stays solid white/black.
 
 ### 5.3 Material
 
@@ -264,10 +267,10 @@ Each milestone lists its **deliverable** (what exists at the end), **tech** (lib
 - **Tech:** Three.js (`Group` hierarchy, quaternion/Euler rotations, `polygonOffset`), an easing util, scrubber wired to `setUnfoldProgress` / `playUnfold`.
 - **Test:** at `progress=0` the silhouette is a single wedge; at `progress=1` the paper is flat and its pattern matches the 2D bake; intermediate frames monotonic with no panel inversion. Assert via headless render + pixel checks at key frames; confirm no flicker at `progress=1` (diff a few stable frames).
 
-### M5 — Paper Shaders bake
-- **Deliverable:** `bridge/PaperTextureBaker.ts` — render the paper-shaders texture offscreen **once**, snapshot to a 2D canvas, supply as `map` (+ optional luminance-derived `bumpMap`); crease bump composited in (per `design18-pipeline.md` Stage 4); a paper-stock settings panel that re-bakes on change.
-- **Tech:** `@paper-design/shaders` core (or the React component mounted offscreen inside `CanvasHost`), Three.js `CanvasTexture`, a Sobel/luminance util for the bump. Panel is a Figma Make component talking to the engine via `setPaperStock`.
-- **Test:** snapshot is taken after first render (assert non-empty / expected histogram — guards against the black-frame trap); changing a stock prop re-bakes and the mesh colour updates; creases read under raking light. Mostly visual + a smoke test on snapshot content.
+### M5 — Paper Shaders bake *(delivered)*
+- **Deliverable:** `bridge/PaperTextureBaker.ts` — render the paper-shaders texture offscreen **once** (core `ShaderMount`, its own WebGL context), snapshot to a 2D canvas, supply as `map` + a luminance-derived `bumpMap`; crease tint + mountain/valley ridges composited in from the fold's crease star (per `design18-pipeline.md` Stage 4). Pure uniform/stock helpers + ridge profile in `bridge/paperStock.ts` (unit-tested). Plus two extensions beyond the original plan: (a) the **paper-stock configurator** `app/PaperStockConfigurator.tsx` (live preview, full control set, JSON export/import — see §5.2); (b) the baked colour map is **also painted into the 2D view** (editor wedge raster + side preview), so the 2D editor reflects the stock.
+- **Tech:** `@paper-design/shaders` core (`ShaderMount`, `paperTextureFragmentShader`, `getShaderNoiseTexture`), Three.js `CanvasTexture` (`map` SRGB / `bumpMap` linear), a raised-cosine ridge profile for the bump (Sobel/normal-map upgrade deferred — bump suffices at this scale). The configurator is a presentational React component talking to the engine only via `setPaperStock`.
+- **Test:** `paperStock.test.ts` covers the pure parts (stock resolution + clamping, uniform mapping with `folds` forced off, ridge profile). The bake is WebGL/canvas (untestable headless) — verified in-browser: the snapshot waits for a **non-transparent** frame before reading (black-frame guard), changing a stock prop re-bakes and the 2D + 3D paper updates, creases read under raking light.
 
 ### M6 — Polish
 - **Deliverable:** fold-intro animation (square → wedge before Draw), lighting + ground shadow, residual-crease relax, PNG/SVG export of the 2D pattern, full state-machine wiring (`FOLD_INTRO → DRAW ⇄ CUT_PREVIEW → UNFOLDING → RESULT`), Figma Make chrome wired through `wireUi.tsx`.
