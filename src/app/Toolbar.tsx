@@ -8,7 +8,7 @@
  */
 
 import type { CSSProperties } from 'react';
-import type { EngineTool } from '../engine/api';
+import type { EngineMode, EngineTool } from '../engine/api';
 
 const TOOLS: { id: EngineTool; label: string }[] = [
   { id: 'freehand', label: '✏︎ Pencil' },
@@ -30,6 +30,9 @@ export interface ToolbarProps {
   readonly outlines: number;
   readonly stampSize: number;
   readonly rotation: number;
+  readonly mode: EngineMode;
+  /** Unfold scrubber position [0,1]: 0 = folded wedge, 1 = flat pattern (3D view only). */
+  readonly unfoldProgress: number;
   readonly onTool: (tool: EngineTool) => void;
   readonly onCut: () => void;
   readonly onUndo: () => void;
@@ -37,6 +40,10 @@ export interface ToolbarProps {
   readonly onClear: () => void;
   readonly onStampSize: (size: number) => void;
   readonly onRotate: (deltaDeg: number) => void;
+  readonly onSetMode: (mode: EngineMode) => void;
+  readonly onLoadTemplate: () => void;
+  readonly onUnfoldProgress: (t: number) => void;
+  readonly onPlayUnfold: () => void;
 }
 
 const bar: CSSProperties = {
@@ -67,7 +74,9 @@ function btn(active: boolean, disabled = false): CSSProperties {
 }
 
 export function Toolbar(props: ToolbarProps) {
-  const { activeTool, canUndo, canRedo, cuts, outlines, stampSize, rotation } = props;
+  const { activeTool, canUndo, canRedo, cuts, outlines, stampSize, rotation, mode, unfoldProgress } =
+    props;
+  const in3d = mode === 'unfold3d';
   return (
     <div style={bar}>
       {TOOLS.map((t) => (
@@ -114,6 +123,36 @@ export function Toolbar(props: ToolbarProps) {
         ⟳
       </button>
       <span style={{ color: '#aaa', minWidth: 32 }}>{rotation}°</span>
+      <span style={sep} />
+      <button type="button" style={btn(false)} onClick={props.onLoadTemplate} title="Load the test-circles template">
+        Load circles
+      </button>
+      <button
+        type="button"
+        style={btn(in3d)}
+        onClick={() => props.onSetMode(in3d ? 'draw' : 'unfold3d')}
+        title="Toggle the 3D unfolded view (alphaMap bridge)"
+      >
+        {in3d ? '◳ 2D editor' : '◰ 3D view'}
+      </button>
+      {in3d && (
+        <>
+          <button type="button" style={btn(false)} onClick={props.onPlayUnfold} title="Animate the unfold">
+            ▶ Unfold
+          </button>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#555' }} title="Scrub the fold">
+            fold
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={unfoldProgress}
+              onChange={(e) => props.onUnfoldProgress(Number(e.target.value))}
+            />
+          </label>
+        </>
+      )}
       <span style={sep} />
       <span style={{ color: '#888' }}>
         {cuts} cut{cuts === 1 ? '' : 's'}

@@ -11,7 +11,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { CanvasHost } from './CanvasHost';
 import { Toolbar } from './Toolbar';
 import { PaperCuttingEngine } from '../engine/EditorEngine';
-import type { EngineTool } from '../engine/api';
+import type { EngineMode, EngineTool } from '../engine/api';
 
 export function Studio() {
   const engine = useMemo(() => new PaperCuttingEngine(), []);
@@ -21,12 +21,17 @@ export function Studio() {
   const [outlines, setOutlines] = useState(0);
   const [stampSize, setStampSize] = useState(0.12);
   const [rotation, setRotation] = useState(0);
+  const [mode, setModeState] = useState<EngineMode>('draw');
+  const [unfoldProgress, setUnfoldProgress] = useState(1);
 
   useEffect(() => {
     const unsubs = [
       engine.on('historychange', setHistory),
       engine.on('pathschange', ({ count }) => setCuts(count)),
       engine.on('outlineschange', ({ count }) => setOutlines(count)),
+      engine.on('modechange', ({ mode }) => setModeState(mode)),
+      // The play animation drives progress engine-side; mirror it so the scrubber tracks the fold.
+      engine.on('unfoldprogress', ({ t }) => setUnfoldProgress(t)),
     ];
     return () => unsubs.forEach((u) => u());
   }, [engine]);
@@ -55,6 +60,8 @@ export function Studio() {
         outlines={outlines}
         stampSize={stampSize}
         rotation={rotation}
+        mode={mode}
+        unfoldProgress={unfoldProgress}
         onTool={chooseTool}
         onCut={() => engine.cut()}
         onUndo={() => engine.undo()}
@@ -62,6 +69,10 @@ export function Studio() {
         onClear={() => engine.clearPaths()}
         onStampSize={changeStampSize}
         onRotate={rotate}
+        onSetMode={(m) => engine.setMode(m)}
+        onLoadTemplate={() => engine.loadTemplate('test-circles')}
+        onUnfoldProgress={(t) => engine.setUnfoldProgress(t)}
+        onPlayUnfold={() => engine.playUnfold()}
       />
       <main style={{ flex: 1, position: 'relative', minHeight: 0 }}>
         <CanvasHost engine={engine} />

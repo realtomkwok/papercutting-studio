@@ -6,6 +6,7 @@
 
 import paper from 'paper';
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type {
   EditorEngine,
   EngineEvent,
@@ -22,6 +23,12 @@ import { EditorModel } from '../editor/EditorModel';
 import { WedgeEditor } from '../editor/WedgeEditor';
 import { UnfoldPreview, PREVIEW_COLORS } from '../editor/UnfoldPreview';
 import { CutCompositor } from '../editor/CutCompositor';
+import { AlphaMapBaker } from '../bridge/AlphaMapBaker';
+import { FoldRig } from '../scene/FoldRig';
+import { loadTemplateInto } from '../templates';
+
+/** Total unfold duration for `playUnfold`, scaled to hinge count (~2.5 s for the 8-panel case, dev-spec §6.2). */
+const UNFOLD_DURATION_MS = 2500;
 
 type Listener<E extends EngineEvent> = (payload: EngineEventPayload[E]) => void;
 
@@ -46,17 +53,29 @@ export class PaperCuttingEngine implements EditorEngine {
   private preview: UnfoldPreview | null = null;
   private visiblePreview: UnfoldPreview | null = null;
   private compositor: CutCompositor | null = null;
+  private baker: AlphaMapBaker | null = null; // M3 bridge: bake canvas → THREE alphaMap mesh
+  private foldRig: FoldRig | null = null; // M4: nested-hinge rig driven by the unfold scrubber
+  private controls: OrbitControls | null = null; // M4: orbit the 3D paper in the unfold view
   private fold: FoldConfig = symmetricalTriangle;
   private currentTool: EngineTool = 'freehand';
   private unsubPaths: Unsubscribe | null = null;
+
+  // M4 3D loop: a RAF loop runs only while the unfold view is shown (orbit damping + play animation).
+  private mode: EngineMode = 'draw';
+  private rafId: number | null = null;
+  private unfoldProgress = 1;
+  private playStart: number | null = null; // timestamp while playUnfold animates; null when idle
 
   constructor() {
     this.model = new EditorModel({
       emit: <E extends EngineEvent>(event: E, payload: EngineEventPayload[E]) =>
         this.emit(event, payload),
       onUnfold: (result) => {
-        this.preview?.render(result); // hidden bake (white/black → alphaMap at M3)
+        this.preview?.render(result); // hidden bake (white/black → alphaMap, M3)
         this.visiblePreview?.render(result); // visible side preview (red sheet, open holes)
+        // M3 bridge: the bake canvas just changed → re-upload it and repaint the 3D view.
+        this.baker?.update();
+        this.render3d();
       },
       fold: this.fold,
     });
@@ -144,6 +163,13 @@ export class PaperCuttingEngine implements EditorEngine {
       100,
     );
     this.camera.position.set(0, 0, 2);
+
+    // Lighting for the MeshStandardMaterial: soft ambient fill + a key light so the cutout reads.
+    this.scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+    const key = new THREE.DirectionalLight(0xffffff, 0.7);
+    key.position.set(1, 1, 2);
+    this.scene.add(key);
+
     this.renderer.render(this.scene, this.camera);
 
     // M2 editor views: Paper.js wedge editor on the visible canvas, 2D-canvas preview on the bake
@@ -160,6 +186,21 @@ export class PaperCuttingEngine implements EditorEngine {
     this.editor.setTool(this.currentTool);
     this.preview = new UnfoldPreview(this.bakeCanvas!);
     this.visiblePreview = new UnfoldPreview(this.previewCanvas!, PREVIEW_COLORS);
+
+    // M3 bridge: wrap the bake canvas as a THREE alphaMap material. M4 fold rig: build one panel per
+    // symmetry copy, all sharing that material, nested in hinge groups. The flat `baker.mesh` is no
+    // longer added to the scene — the rig replaces it (at progress=1 the rig tiles the same square).
+    this.baker = new AlphaMapBaker(this.bakeCanvas!);
+    this.foldRig = new FoldRig(this.fold, this.baker.getMaterial());
+    this.scene!.add(this.foldRig.group);
+    this.foldRig.setProgress(this.unfoldProgress);
+
+    // OrbitControls: spin/zoom the unfolded paper. Enabled only in the 3D view (toggled in setMode).
+    this.controls = new OrbitControls(this.camera!, this.viewCanvas!);
+    this.controls.enableDamping = true;
+    this.controls.enabled = false;
+    this.controls.target.set(0, 0, 0);
+    this.controls.update();
     // Re-render the editor (merged cuts + pending outlines) on either change.
     const u1 = this.on('pathschange', () => this.editor?.refresh());
     const u2 = this.on('outlineschange', () => this.editor?.refresh());
@@ -172,7 +213,50 @@ export class PaperCuttingEngine implements EditorEngine {
     this.emit('ready', {});
   }
 
+  /** Repaint the Three.js view. Render-on-demand for M3 (no animation loop until the M4 fold rig).
+   *  Sizes the renderer + camera to the container first: the view canvas is `display:none` at mount,
+   *  so its size isn't reliable until it's shown — sync here so the square plane stays square. */
+  private render3d(): void {
+    if (!this.renderer || !this.scene || !this.camera || !this.root) return;
+    const w = this.root.clientWidth || 1;
+    const h = this.root.clientHeight || 1;
+    this.renderer.setSize(w, h, false);
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  /** RAF loop, alive only while the unfold view is shown. Advances the play-unfold animation, steps
+   *  OrbitControls' damping, and repaints. Stops (and stops rescheduling) the moment we leave 3D. */
+  private loop = (now: number): void => {
+    if (this.mode !== 'unfold3d') {
+      this.rafId = null;
+      return;
+    }
+    if (this.playStart !== null) {
+      const t = Math.min(1, (now - this.playStart) / UNFOLD_DURATION_MS);
+      this.applyUnfoldProgress(t);
+      if (t >= 1) this.playStart = null;
+    }
+    this.controls?.update();
+    this.renderer?.render(this.scene!, this.camera!);
+    this.rafId = requestAnimationFrame(this.loop);
+  };
+
+  private startLoop(): void {
+    if (this.rafId === null) this.rafId = requestAnimationFrame(this.loop);
+  }
+
+  /** Set the rig's fold state and notify the UI. Shared by the scrubber and the play animation. */
+  private applyUnfoldProgress(t: number): void {
+    this.unfoldProgress = Math.max(0, Math.min(1, t));
+    this.foldRig?.setProgress(this.unfoldProgress);
+    this.emit('unfoldprogress', { t: this.unfoldProgress });
+  }
+
   dispose(): void {
+    if (this.rafId !== null) cancelAnimationFrame(this.rafId);
+    this.rafId = null;
     this.unsubPaths?.();
     this.unsubPaths = null;
     this.resizeObs?.disconnect();
@@ -181,10 +265,16 @@ export class PaperCuttingEngine implements EditorEngine {
     this.editor?.dispose();
     this.preview?.dispose();
     this.visiblePreview?.dispose();
+    this.controls?.dispose();
+    this.foldRig?.dispose();
+    this.baker?.dispose();
     this.editor = null;
     this.preview = null;
     this.visiblePreview = null;
     this.compositor = null;
+    this.controls = null;
+    this.foldRig = null;
+    this.baker = null;
     this.renderer?.dispose();
     this.paperScope?.project?.clear();
     if (this.root) {
@@ -212,10 +302,17 @@ export class PaperCuttingEngine implements EditorEngine {
   }
 
   setMode(mode: EngineMode): void {
+    this.mode = mode;
     const showEditor = mode === 'draw' || mode === 'preview';
+    const in3d = mode === 'unfold3d';
     if (this.editorCanvas) this.editorCanvas.style.display = showEditor ? 'block' : 'none';
     if (this.previewCanvas) this.previewCanvas.style.display = showEditor ? 'block' : 'none';
-    if (this.viewCanvas) this.viewCanvas.style.display = mode === 'unfold3d' ? 'block' : 'none';
+    if (this.viewCanvas) this.viewCanvas.style.display = in3d ? 'block' : 'none';
+    if (this.controls) this.controls.enabled = in3d;
+    if (in3d) {
+      this.render3d(); // size + paint the latest bake before the loop takes over
+      this.startLoop(); // orbit damping + play animation run only while the 3D view is visible
+    }
     this.emit('modechange', { mode });
   }
 
@@ -252,8 +349,9 @@ export class PaperCuttingEngine implements EditorEngine {
     this.editor?.setViewRotation(deg);
   }
 
-  loadTemplate(_id: string): void {
-    // TODO: M2.5 wires template loading (importSVG → addCutPath per sub-path).
+  loadTemplate(id: string): void {
+    // M2.5: replay a JSON template's cuts through the editor (validated/snapped like drawn cuts).
+    loadTemplateInto(this, id);
   }
 
   loadFoldConfig(id: string): void {
@@ -262,14 +360,27 @@ export class PaperCuttingEngine implements EditorEngine {
     this.fold = fold;
     this.model.setFold(fold);
     this.editor?.setFold(fold);
+    // Rebuild the 3D rig for the new panel/hinge layout (panel count + hinge axes come from foldConfig).
+    if (this.foldRig && this.scene && this.baker) {
+      this.scene.remove(this.foldRig.group);
+      this.foldRig.dispose();
+      this.foldRig = new FoldRig(fold, this.baker.getMaterial());
+      this.scene.add(this.foldRig.group);
+      this.foldRig.setProgress(this.unfoldProgress);
+    }
   }
 
   setUnfoldProgress(t: number): void {
-    this.emit('unfoldprogress', { t });
+    this.playStart = null; // a manual scrub cancels any running play animation
+    this.applyUnfoldProgress(t);
   }
 
   playUnfold(): void {
-    // TODO: M4 wires the fold rig.
+    // Animate progress 0 → 1 from a folded start. The RAF loop reads `playStart`; ensure it's running
+    // (it only runs in the 3D view) so calling play in 2D still arms the animation for when 3D opens.
+    this.applyUnfoldProgress(0);
+    this.playStart = performance.now();
+    if (this.mode === 'unfold3d') this.startLoop();
   }
 
   setPaperStock(_props: PaperStockProps): void {
