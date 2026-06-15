@@ -36,3 +36,18 @@ Items deferred from milestone work, to revisit before the milestone is considere
 - [ ] **Normal map from the bump canvas (deferred per spec).** v1 uses a `bumpMap` only. For sharper
   crease relief under raking light, derive a normal map (Sobel on the combined bump canvas) — see
   worked-example Stage 4.
+
+mc## M6.5 — Polish
+
+- [ ] **Rotate tool for 3D view — replace left/right buttons with free 360° drag.** The current UI
+  has discrete left/right rotation controls. Replace with a single rotate-tool mode where the user
+  can drag freely to orbit the camera in 360°. Default starting angle should be 180° (matching the
+  current visual default) rather than 0°. Likely implemented by switching `OrbitControls` to
+  pointer-drag mode and removing the step-button controls; the starting azimuth should be initialised
+  to π in `FoldRig` or `Studio`.
+
+- [ ] **Remove the visible border from the 2D paper wedge to match paper texture.** The wedge editor
+  currently renders a hard geometric border around the paper area. For a more realistic paper look,
+  strip the stroke/border so the wedge edge fades into or aligns with the baked paper texture.
+  Adjust `WedgeEditor.drawStatic` (and any `strokePath` calls in the wedge boundary draw) to omit
+  the outline, or blend it so it is not visible against the colour-map background.
