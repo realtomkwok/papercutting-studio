@@ -24,6 +24,7 @@ import { WedgeEditor } from '../editor/WedgeEditor';
 import { UnfoldPreview, PREVIEW_COLORS } from '../editor/UnfoldPreview';
 import type { UnfoldResult } from '../core/unfold';
 import { CutCompositor } from '../editor/CutCompositor';
+import { RegionDetector } from '../bridge/RegionDetector';
 import { AlphaMapBaker } from '../bridge/AlphaMapBaker';
 import { PaperTextureBaker } from '../bridge/PaperTextureBaker';
 import { FoldRig } from '../scene/FoldRig';
@@ -56,6 +57,7 @@ export class PaperCuttingEngine implements EditorEngine {
   private preview: UnfoldPreview | null = null;
   private visiblePreview: UnfoldPreview | null = null;
   private compositor: CutCompositor | null = null;
+  private detector: RegionDetector | null = null; // scissors: flood-fill enclosed-area detection
   private baker: AlphaMapBaker | null = null; // M3 bridge: bake canvas → THREE alphaMap mesh
   private paperBaker: PaperTextureBaker | null = null; // M5: paper-shaders colour map + crease bump
   private foldRig: FoldRig | null = null; // M4: nested-hinge rig driven by the unfold scrubber
@@ -184,8 +186,13 @@ export class PaperCuttingEngine implements EditorEngine {
     // into the headless model so both the editor and the previews work off the merged region.
     this.compositor = new CutCompositor(this.paperScope!, () => this.wedgeVerts());
     this.model.setCompositor({
-      design: (ops) => this.compositor!.design(ops),
       committed: (batches) => this.compositor!.committed(batches),
+    });
+    // Scissors region detector (raster flood fill): finds the enclosed areas the pencil sketch seals
+    // off, so the editor can highlight them and the model can cut them out.
+    this.detector = new RegionDetector();
+    this.model.setDetector({
+      detect: (strokes, fold) => this.detector!.detect(strokes, fold),
     });
 
     // The 2D editor + side preview paint their paper with the M5 paper-shaders bake (a lazy closure —
@@ -291,10 +298,12 @@ export class PaperCuttingEngine implements EditorEngine {
     this.foldRig?.dispose();
     this.paperBaker?.dispose();
     this.baker?.dispose();
+    this.detector?.dispose();
     this.editor = null;
     this.preview = null;
     this.visiblePreview = null;
     this.compositor = null;
+    this.detector = null;
     this.controls = null;
     this.foldRig = null;
     this.paperBaker = null;
@@ -345,8 +354,8 @@ export class PaperCuttingEngine implements EditorEngine {
     this.editor?.setTool(tool);
   }
 
-  drawOutline(points: readonly Point[]): void {
-    this.model.drawOutline(points);
+  drawStroke(points: readonly Point[]): void {
+    this.model.drawStroke(points);
   }
 
   cut(at?: Point): void {
@@ -367,6 +376,19 @@ export class PaperCuttingEngine implements EditorEngine {
 
   setStampSize(size: number): void {
     this.editor?.setStampSize(size);
+  }
+
+  setPencilWidth(px: number): void {
+    this.editor?.setPencilWidth(px);
+  }
+
+  setEraserWidth(size: number): void {
+    this.editor?.setEraseRadius(size);
+  }
+
+  setScissorsMargin(margin: number): void {
+    this.detector?.setCutMargin(margin);
+    this.model.refreshRegions(); // re-detect with the new fit; editor repaints the highlights
   }
 
   setViewRotation(deg: number): void {

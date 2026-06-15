@@ -29,6 +29,12 @@ export interface ToolbarProps {
   readonly cuts: number;
   readonly outlines: number;
   readonly stampSize: number;
+  /** Pencil ink width (view pixels). */
+  readonly pencilWidth: number;
+  /** Eraser radius (unit-square units). */
+  readonly eraserWidth: number;
+  /** Scissors cut-fit margin (unit-square units): tight ↔ loose around the pencil line. */
+  readonly scissorsMargin: number;
   readonly rotation: number;
   readonly mode: EngineMode;
   /** Unfold scrubber position [0,1]: 0 = folded wedge, 1 = flat pattern (3D view only). */
@@ -39,6 +45,9 @@ export interface ToolbarProps {
   readonly onRedo: () => void;
   readonly onClear: () => void;
   readonly onStampSize: (size: number) => void;
+  readonly onPencilWidth: (px: number) => void;
+  readonly onEraserWidth: (size: number) => void;
+  readonly onScissorsMargin: (margin: number) => void;
   readonly onRotate: (deltaDeg: number) => void;
   readonly onSetMode: (mode: EngineMode) => void;
   readonly onLoadTemplate: () => void;
@@ -76,7 +85,7 @@ function btn(active: boolean, disabled = false): CSSProperties {
 }
 
 export function Toolbar(props: ToolbarProps) {
-  const { activeTool, canUndo, canRedo, cuts, outlines, stampSize, rotation, mode, unfoldProgress } =
+  const { activeTool, canUndo, canRedo, cuts, outlines, stampSize, pencilWidth, eraserWidth, scissorsMargin, rotation, mode, unfoldProgress } =
     props;
   const in3d = mode === 'unfold3d';
   return (
@@ -104,8 +113,47 @@ export function Toolbar(props: ToolbarProps) {
           />
         </label>
       )}
+      {activeTool === 'freehand' && (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#555' }} title="Pencil width">
+          width
+          <input
+            type="range"
+            min={1}
+            max={8}
+            step={0.5}
+            value={pencilWidth}
+            onChange={(e) => props.onPencilWidth(Number(e.target.value))}
+          />
+        </label>
+      )}
+      {activeTool === 'erase' && (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#555' }} title="Eraser width">
+          width
+          <input
+            type="range"
+            min={0.01}
+            max={0.08}
+            step={0.005}
+            value={eraserWidth}
+            onChange={(e) => props.onEraserWidth(Number(e.target.value))}
+          />
+        </label>
+      )}
+      {activeTool === 'scissors' && (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#555' }} title="How tightly the cut hugs the pencil line">
+          fit
+          <input
+            type="range"
+            min={-0.03}
+            max={0.03}
+            step={0.002}
+            value={scissorsMargin}
+            onChange={(e) => props.onScissorsMargin(Number(e.target.value))}
+          />
+        </label>
+      )}
       <span style={sep} />
-      <button type="button" style={btn(false)} onClick={props.onCut} title="Cut out all pending outlines">
+      <button type="button" style={btn(false)} onClick={props.onCut} title="Cut out every enclosed area the sketch encloses">
         Cut all
       </button>
       <button type="button" style={btn(false, !canUndo)} disabled={!canUndo} onClick={props.onUndo}>
@@ -166,7 +214,7 @@ export function Toolbar(props: ToolbarProps) {
       <span style={sep} />
       <span style={{ color: '#888' }}>
         {cuts} cut{cuts === 1 ? '' : 's'}
-        {outlines > 0 ? `, ${outlines} pending` : ''}
+        {outlines > 0 ? `, ${outlines} sketch line${outlines === 1 ? '' : 's'}` : ''}
       </span>
     </div>
   );

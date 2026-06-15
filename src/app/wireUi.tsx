@@ -21,6 +21,9 @@ export function Studio() {
   const [cuts, setCuts] = useState(0);
   const [outlines, setOutlines] = useState(0);
   const [stampSize, setStampSize] = useState(0.12);
+  const [pencilWidth, setPencilWidth] = useState(1.6);
+  const [eraserWidth, setEraserWidth] = useState(0.025);
+  const [scissorsMargin, setScissorsMargin] = useState(0);
   const [rotation, setRotation] = useState(0);
   const [mode, setModeState] = useState<EngineMode>('draw');
   const [unfoldProgress, setUnfoldProgress] = useState(1);
@@ -48,6 +51,18 @@ export function Studio() {
     setStampSize(size);
     engine.setStampSize(size);
   };
+  const changePencilWidth = (px: number) => {
+    setPencilWidth(px);
+    engine.setPencilWidth(px);
+  };
+  const changeEraserWidth = (size: number) => {
+    setEraserWidth(size);
+    engine.setEraserWidth(size);
+  };
+  const changeScissorsMargin = (margin: number) => {
+    setScissorsMargin(margin);
+    engine.setScissorsMargin(margin);
+  };
   const rotate = (delta: number) => {
     const deg = ((rotation + delta) % 360 + 360) % 360;
     setRotation(deg);
@@ -63,6 +78,9 @@ export function Studio() {
         cuts={cuts}
         outlines={outlines}
         stampSize={stampSize}
+        pencilWidth={pencilWidth}
+        eraserWidth={eraserWidth}
+        scissorsMargin={scissorsMargin}
         rotation={rotation}
         mode={mode}
         unfoldProgress={unfoldProgress}
@@ -72,6 +90,9 @@ export function Studio() {
         onRedo={() => engine.redo()}
         onClear={() => engine.clearPaths()}
         onStampSize={changeStampSize}
+        onPencilWidth={changePencilWidth}
+        onEraserWidth={changeEraserWidth}
+        onScissorsMargin={changeScissorsMargin}
         onRotate={rotate}
         onSetMode={(m) => engine.setMode(m)}
         onLoadTemplate={() => engine.loadTemplate('test-circles')}
