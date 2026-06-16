@@ -1,0 +1,76 @@
+/**
+ * Global design tokens + font/icon imports for the editor chrome (editor-chrome-spec.md §"Design Tokens").
+ *
+ * The semantic colour vars use escaped slashes (`--color\/background`) so they read like the Figma
+ * token names; components reference them verbatim as `var(--color\/background)`.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Shippori+Antique+B1&display=swap');
+@import 'material-symbols/outlined';
+
+:root {
+  /* Semantic */
+  --color\/background: #f5f2ef;
+  --color\/card: #eae4dc;
+  --color\/border: #9a9088;
+  --color\/foreground: #2e2926;
+  --color\/secondary-foreground: #524a44;
+  /* Button/control semantics (Figma 34:40, 75:680) */
+  --color\/primary: #2e2926;
+  --color\/primary-foreground: #f5f2ef;
+  --color\/muted: #d4ccc0;
+  --color\/muted-foreground: #9a9088;
+  --color\/popover: #f5f2ef;
+  --color\/popover-foreground: #2e2926;
+  --color\/input: #d4ccc0;
+  --color\/accent: #c85c4a;
+
+  /* Paper colours */
+  --paper\/coral-red: #c85c4a;
+
+  /* Neutral palette */
+  --neutral\/warm-white: #f5f2ef;
+  --neutral\/linen: #eae4dc;
+  --neutral\/parchment: #d4ccc0;
+  --neutral\/warm-silver: #b8afa2;
+  --neutral\/stone: #9a9088;
+  --neutral\/driftwood: #7a706a;
+  --neutral\/charcoal-clay: #524a44;
+  --neutral\/ink: #2e2926;
+
+  /* SDS typography scale */
+  --sds-typography-heading-size-base: 24px;
+  --sds-typography-subheading-size-small: 16px;
+  --sds-typography-body-size-medium: 16px;
+  --sds-typography-body-size-small: 14px;
+
+  /* SDS spacing */
+  --sds-size-space-1200: 48px;
+}
+
+/* Tool hover-tooltip / selected-submenu entrance (Toolbar) */
+@keyframes toolPopoverIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+}

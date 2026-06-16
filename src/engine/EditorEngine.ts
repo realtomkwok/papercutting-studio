@@ -99,7 +99,7 @@ export class PaperCuttingEngine implements EditorEngine {
       width: '100%',
       height: '100%',
       display: 'block',
-      background: '#faf7f2', // light paper backdrop, independent of the OS colour scheme
+      background: 'transparent', // let the editor chrome's dotted-grid backdrop show through
     });
 
     // Hidden bake canvas: full-square unfolded pattern at texture resolution.

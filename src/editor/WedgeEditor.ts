@@ -54,12 +54,18 @@ export class WedgeEditor {
   private draftMode: 'pencil' | 'erase' = 'pencil';
 
   private scale = 1;
+  /** Interactive zoom multiplier (scroll-to-zoom), applied on top of the fit-to-canvas scale. */
+  private zoom = 1;
   private center = new paper.Point(0, 0);
   /** Unit-space point mapped to the view centre — the wedge bounding-box centre, so the wedge is
    *  framed in the middle of the canvas rather than hung off its apex at the origin. */
   private frameCenter: Point = { x: 0, y: 0 };
   /** View-only rotation of the paper, in degrees (drawing convenience; geometry unaffected). */
   private rotationDeg = 0;
+  /** Anchor captured on rotate-tool pointer-down: cursor angle around the centre + the rotation then,
+   *  so the drag turns the paper to follow the cursor (a real rotate handle) instead of reacting to
+   *  horizontal movement alone — which reversed below the centre. */
+  private rotateStart: { angle: number; deg: number } | null = null;
 
   /** Stamp radius in unit-square units (settable via the size slider). */
   private stampSize = 0.12;
@@ -91,13 +97,27 @@ export class WedgeEditor {
 
     this.scope.view.onResize = () => this.relayout();
 
+    // Scroll-to-zoom: wheel over the canvas scales the editor view about its centre. Non-passive so
+    // we can suppress the page from scrolling underneath.
+    this.scope.view.element.addEventListener('wheel', this.onWheel, { passive: false });
+
     this.relayout(); // also renders the current composed region
   }
+
+  /** Wheel → zoom the editor view (centred). Bound so it can be added/removed as a listener. */
+  private readonly onWheel = (e: WheelEvent): void => {
+    e.preventDefault();
+    const factor = Math.exp(-e.deltaY * 0.0015); // smooth, direction-correct (up = zoom in)
+    this.zoom = Math.min(6, Math.max(0.3, this.zoom * factor));
+    this.relayout();
+  };
 
   setTool(tool: EngineTool): void {
     this.current = tool;
     this.cancelDraft();
     this.clearGhost();
+    // The hand tool gets a grab cursor; every drawing tool falls back to the default crosshair-ish.
+    this.scope.view.element.style.cursor = tool === 'rotate' ? 'grab' : '';
     this.refresh(); // scissors highlights only show while the scissors tool is active
   }
 
@@ -187,7 +207,7 @@ export class WedgeEditor {
     const bw = Math.max(maxX - minX, 1e-6);
     const bh = Math.max(maxY - minY, 1e-6);
     this.frameCenter = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
-    this.scale = 0.85 * Math.min(width / bw, height / bh);
+    this.scale = 0.85 * Math.min(width / bw, height / bh) * this.zoom;
 
     this.drawStatic();
     this.refresh();
@@ -204,8 +224,8 @@ export class WedgeEditor {
       segments: this.wedgeVertices().map((v) => this.unitToView(v)),
       closed: true,
     });
-    wedge.strokeColor = new paper.Color(0.4, 0.05, 0.1);
-    wedge.strokeWidth = 1.5;
+    // Outline is drawn separately below so the two folded edges read as dashed crease lines while the
+    // open edge stays solid — the wedge path itself carries only the fill (or texture).
 
     // Paper sheet fill: the baked paper texture (cover-fit + clipped to the wedge) if available, else
     // flat red. The raster reads the texture canvas at creation, so redrawPaper() recreates it.
@@ -223,6 +243,20 @@ export class WedgeEditor {
       wedge.fillColor = PAPER_FILL; // the paper sheet is red (matches the final design)
     }
 
+    // Outline: the open edge (the outer paper boundary) is solid; the two folded edges (apex → each
+    // outer corner) are dashed, the conventional fold/crease notation.
+    const [apex, c1, c2] = this.wedgeVertices().map((v) => this.unitToView(v));
+    const edgeColor = new paper.Color(0.4, 0.05, 0.1);
+    const openEdge = new paper.Path({ segments: [c1!, c2!] });
+    openEdge.strokeColor = edgeColor;
+    openEdge.strokeWidth = 1.5;
+    for (const corner of [c1!, c2!]) {
+      const crease = new paper.Path({ segments: [apex!, corner] });
+      crease.strokeColor = edgeColor;
+      crease.strokeWidth = 1.5;
+      crease.dashArray = [2, 4];
+    }
+
     // Labels at the mid-radius of each folded edge and just outside the open edge.
     const startMid = boundaryPointAtAngle(this.fold.wedgeStart, 0.25);
     const endMid = boundaryPointAtAngle(this.fold.wedgeEnd, 0.25);
@@ -235,10 +269,9 @@ export class WedgeEditor {
   private addLabel(text: string, at: Point): void {
     const label = new paper.PointText(this.unitToView(at));
     label.content = text;
-    // White with a soft dark shadow so it reads on both the red paper and the light background.
-    label.fillColor = new paper.Color(1, 1, 1, 0.95);
-    label.shadowColor = new paper.Color(0, 0, 0, 0.5);
-    label.shadowBlur = 3;
+    // Match the rest of the chrome: foreground ink in the Shippori body typeface.
+    label.fillColor = new paper.Color('#2e2926');
+    label.fontFamily = 'Shippori Antique B1';
     label.fontSize = 11;
     label.justification = 'center';
   }
@@ -276,15 +309,23 @@ export class WedgeEditor {
     // Painted over the ink, so a cut area's pencil lines disappear under the clean hole.
     const contours = this.model.composedContours;
     if (contours.length > 0) {
-      const region = new paper.CompoundPath({
-        children: contours.map(
-          (pts) => new paper.Path({ segments: pts.map((p) => this.unitToView(p)), closed: true }),
-        ),
-      });
-      region.fillRule = 'evenodd';
-      region.fillColor = HOLE_FILL;
-      region.strokeColor = CUT_STROKE;
-      region.strokeWidth = 0.75;
+      const buildRegion = () =>
+        new paper.CompoundPath({
+          children: contours.map(
+            (pts) => new paper.Path({ segments: pts.map((p) => this.unitToView(p)), closed: true }),
+          ),
+          fillRule: 'evenodd',
+        });
+      // Punch real holes: erase the red paper (and the ink it encloses) so the dotted-grid backdrop
+      // shows through the cut, exactly like the removed paper of the finished piece. `destination-out`
+      // composites against everything already drawn beneath, leaving those pixels transparent.
+      const hole = buildRegion();
+      hole.fillColor = HOLE_FILL; // colour is irrelevant under destination-out; alpha 1 = full erase
+      hole.blendMode = 'destination-out';
+      // Redraw the clean cut edge on top — the erase above would otherwise remove its own outline.
+      const edge = buildRegion();
+      edge.strokeColor = CUT_STROKE;
+      edge.strokeWidth = 0.75;
     }
 
     // Scissors overlays (on top of everything):
@@ -320,9 +361,19 @@ export class WedgeEditor {
   }
 
   // ── tool handlers ─────────────────────────────────────────────────────────
+  /** Angle (radians) of a view-space point around the canvas centre, for the rotate handle. */
+  private pointerAngle(p: paper.Point): number {
+    return Math.atan2(p.y - this.center.y, p.x - this.center.x);
+  }
+
   private onDown(e: paper.ToolEvent): void {
     const tool = this.current;
     const u = this.viewToUnit(e.point);
+    if (tool === 'rotate') {
+      this.scope.view.element.style.cursor = 'grabbing';
+      this.rotateStart = { angle: this.pointerAngle(e.point), deg: this.rotationDeg };
+      return; // rotation happens on drag; a bare click is a no-op
+    }
     if (tool === 'scissors') {
       this.model.cut(u); // cut out the enclosed area under the cursor
       return;
@@ -350,10 +401,23 @@ export class WedgeEditor {
   }
 
   private onDrag(e: paper.ToolEvent): void {
+    if (this.current === 'rotate') {
+      // Turn the paper to follow the cursor's angle around the centre (a rotate handle).
+      if (this.rotateStart) {
+        const delta = ((this.pointerAngle(e.point) - this.rotateStart.angle) * 180) / Math.PI;
+        this.setViewRotation(this.rotateStart.deg + delta);
+      }
+      return;
+    }
     if (this.draft) this.draft.add(e.point);
   }
 
   private onUp(_e: paper.ToolEvent): void {
+    if (this.current === 'rotate') {
+      this.scope.view.element.style.cursor = 'grab';
+      this.rotateStart = null;
+      return;
+    }
     if (!this.draft) return;
     const draft = this.draft;
     const mode = this.draftMode;
@@ -416,6 +480,7 @@ export class WedgeEditor {
 
   dispose(): void {
     this.cancelDraft();
+    this.scope.view.element.removeEventListener('wheel', this.onWheel);
     this.tool.remove();
     this.staticLayer.remove();
     this.pathsLayer.remove();

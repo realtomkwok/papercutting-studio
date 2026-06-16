@@ -21,7 +21,10 @@ export type EngineTool =
   | 'triangle'
   | 'contour'
   | 'scissors'
-  | 'erase';
+  | 'erase'
+  // View-only "hand" tool: drag the canvas to rotate the paper (geometry unaffected). Not a drawing
+  // tool — handled in the editor's pointer handlers, produces no strokes.
+  | 'rotate';
 
 export type ExportFormat = 'svg' | 'png';
 
