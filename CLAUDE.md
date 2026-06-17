@@ -71,7 +71,7 @@ Build order is sequential except M2.5 ‖ M3. Each milestone's acceptance criter
 - **M3** Bridge: `AlphaMapBaker` — bake canvas → `THREE.CanvasTexture` as alphaMap, live-updating.
 - **M4** Fold rig: nested hinges from `foldConfig`, single `progress ∈ [0,1]` scrubber, eased ~10%-overlapping segments.
 - **M5** Paper Shaders bake *(done)*: `PaperTextureBaker` (offscreen `ShaderMount` → snapshot → `map` + luminance/crease `bumpMap`) + crease bump/tint composite (worked-example Stage 4); pure `bridge/paperStock.ts` (uniform mapping, ridge profile). Extensions: the baked colour map is also painted into the 2D editor wedge + side preview, and `app/PaperStockConfigurator.tsx` is a live configurator (full controls + JSON export/import) that re-bakes via `setPaperStock`.
-- **M6** Wired the UI and functionalities through `wireUi.tsx`.
+- **M6** Wired the UI and functionalities through `wireUi.tsx`, including the **Preview & Share** screen (Figma 50:401): the editor's Share button switches the single mounted engine into the 3D unfold view, with an instructions card and a Print/Save/Share bottom bar (`src/app/Preview*`, `SharePopup`). The three actions are minimal stubs — refinements in `docs/TODO.md`.
 - **M6.5** Polish: fold-intro, lighting, residual-crease relax, PNG/SVG export, full FSM
 - **M7** Print export: printable instruction sheet — to-scale fold template (at physical paper size), fold-sequence diagram from `foldConfig`, expected-result preview. Browser `window.print()` + `@media print` stylesheet; `jsPDF` fallback if scale control requires it. `exportPattern` extended to `'svg' | 'png' | 'pdf'`.
 

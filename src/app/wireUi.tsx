@@ -2,16 +2,24 @@
  * wireUi — the single seam that knows BOTH the engine and the UI (dev-spec §3.3 / architecture).
  *
  * It owns the `PaperCuttingEngine`, renders the presentational chrome (`TopBar`, `Toolbar`,
- * `PreviewPanel`, `CanvasHost`), maps callbacks to engine commands, and mirrors engine events into
- * React state for enabled/active states. When the Figma Make chrome is regenerated, only this file
- * should need re-checking.
+ * `PreviewPanel`, `CanvasHost`, and the Preview & Share screen), maps callbacks to engine commands,
+ * and mirrors engine events into React state for enabled/active states. When the Figma Make chrome is
+ * regenerated, only this file should need re-checking.
+ *
+ * Two screens share ONE mounted engine (the engine owns its canvases inside `CanvasHost`, which stays
+ * mounted across screens): the **editor** (draw mode) and **Preview & Share** (the 3D unfold view).
+ * Switching screens just toggles the engine mode and swaps the surrounding chrome — no remount.
  */
 
 import { useEffect, useMemo, useState } from 'react';
 import { CanvasHost } from './CanvasHost';
 import { Toolbar } from './Toolbar';
 import { TopBar } from './TopBar';
+import { PreviewTopBar } from './PreviewTopBar';
 import { PreviewPanel } from './PreviewPanel';
+import { InstructionsCard } from './InstructionsCard';
+import { PreviewBottomBar } from './PreviewBottomBar';
+import { SharePopup } from './SharePopup';
 import { PaperStockConfigurator } from './PaperStockConfigurator';
 import { PaperCuttingEngine } from '../engine/EditorEngine';
 import type { EngineTool, PaperStockProps } from '../engine/api';
@@ -26,8 +34,30 @@ const PRESET_BY_HEX = new Map<string, ColorPreset>(
   ]),
 );
 
+type Screen = 'editor' | 'preview';
+
+/** Build a preview link that round-trips the paper stock through the URL (`?stock=<base64 JSON>`). */
+function shareUrlFor(stock: PaperStockProps): string {
+  const { origin, pathname } = window.location;
+  const encoded = encodeURIComponent(btoa(JSON.stringify(stock)));
+  return `${origin}${pathname}?stock=${encoded}`;
+}
+
+/** Read a `?stock=` param back into a PaperStockProps, or `null` if absent/invalid. */
+function stockFromUrl(): PaperStockProps | null {
+  try {
+    const raw = new URLSearchParams(window.location.search).get('stock');
+    if (!raw) return null;
+    return JSON.parse(atob(decodeURIComponent(raw))) as PaperStockProps;
+  } catch {
+    return null;
+  }
+}
+
 export function Studio() {
   const engine = useMemo(() => new PaperCuttingEngine(), []);
+  const [screen, setScreen] = useState<Screen>('editor');
+  const [shareOpen, setShareOpen] = useState(false);
   const [tool, setTool] = useState<EngineTool>('freehand');
   const [history, setHistory] = useState({ canUndo: false, canRedo: false });
   const [cuts, setCuts] = useState(0);
@@ -56,6 +86,9 @@ export function Studio() {
     engine.setPencilWidth(pencilWidth);
     engine.setEraserWidth(0.025);
     engine.setScissorsMargin(scissorsMargin);
+    // Restore a shared design from the URL (the Share popup writes `?stock=`).
+    const fromUrl = stockFromUrl();
+    if (fromUrl) handleApplyPaperStock(fromUrl);
     return () => unsubs.forEach((u) => u());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine]);
@@ -87,9 +120,23 @@ export function Studio() {
     engine.setTool(t);
   };
 
+  // ── Screen navigation ─────────────────────────────────────────────────────────────────────────
+  // Editor → Preview & Share: switch the engine to the 3D unfold view and play the reveal.
+  const goToPreview = () => {
+    setScreen('preview');
+    engine.setMode('unfold3d');
+    engine.playUnfold();
+  };
+  // Preview & Share → Editor: back to the flat draw view.
+  const goToEditor = () => {
+    setScreen('editor');
+    engine.setMode('draw');
+  };
+
   const handleNew = () => {
     if ((cuts > 0 || outlines > 0) && !window.confirm('Clear the current design?')) return;
     engine.clearPaths();
+    if (screen === 'preview') goToEditor();
   };
 
   const handleApplyPaperStock = (props: PaperStockProps) => {
@@ -100,18 +147,34 @@ export function Studio() {
     if (preset) setPaperProperties((p) => ({ ...p, colorPreset: preset }));
   };
 
+  // ── Preview & Share actions ───────────────────────────────────────────────────────────────────
+  // Print: M7 will produce a to-scale fold template with guides; until then, the browser print dialog.
+  const handlePrint = () => window.print();
+  // Save: download the design's JSON config (the paper stock that re-bakes the look).
+  const handleSave = () => {
+    const blob = new Blob([JSON.stringify(paperStock, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'paper-cutting-design.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <TopBar
-        onNew={handleNew}
-        // TODO(import): the real target is the `lotus-cross` template, but it isn't built yet (only
-        // `test-circles` exists). Loading `test-circles` for now so the button is functional; swap to
-        // `lotus-cross` once that template's geometry is pinned.
-        onImport={() => engine.loadTemplate('test-circles')}
-        onShare={() => {
-          /* TODO: navigate to the Share screen (separate Figma frame). */
-        }}
-      />
+      {screen === 'editor' ? (
+        <TopBar
+          onNew={handleNew}
+          // TODO(import): the real target is the `lotus-cross` template, but it isn't built yet (only
+          // `test-circles` exists). Loading `test-circles` for now so the button is functional; swap to
+          // `lotus-cross` once that template's geometry is pinned.
+          onImport={() => engine.loadTemplate('test-circles')}
+          onShare={goToPreview}
+        />
+      ) : (
+        <PreviewTopBar onBack={goToEditor} onNew={handleNew} />
+      )}
       <main
         style={{
           flex: 1,
@@ -124,22 +187,35 @@ export function Studio() {
         }}
       >
         <CanvasHost engine={engine} />
-        <Toolbar
-          activeTool={tool}
-          canUndo={history.canUndo}
-          canRedo={history.canRedo}
-          paperProperties={paperProperties}
-          pencilWidth={pencilWidth}
-          stampSize={stampSize}
-          scissorsMargin={scissorsMargin}
-          onUndo={() => engine.undo()}
-          onRedo={() => engine.redo()}
-          onTool={chooseTool}
-          onPencilWidth={handlePencilWidth}
-          onStampSize={handleStampSize}
-          onScissorsMargin={handleScissorsMargin}
-        />
-        <PreviewPanel />
+        {screen === 'editor' ? (
+          <>
+            <Toolbar
+              activeTool={tool}
+              canUndo={history.canUndo}
+              canRedo={history.canRedo}
+              paperProperties={paperProperties}
+              pencilWidth={pencilWidth}
+              stampSize={stampSize}
+              scissorsMargin={scissorsMargin}
+              onUndo={() => engine.undo()}
+              onRedo={() => engine.redo()}
+              onTool={chooseTool}
+              onPencilWidth={handlePencilWidth}
+              onStampSize={handleStampSize}
+              onScissorsMargin={handleScissorsMargin}
+            />
+            <PreviewPanel />
+          </>
+        ) : (
+          <>
+            <InstructionsCard />
+            <PreviewBottomBar
+              onPrint={handlePrint}
+              onSave={handleSave}
+              onShare={() => setShareOpen(true)}
+            />
+          </>
+        )}
       </main>
       <PaperStockConfigurator
         open={paperConfigOpen}
@@ -147,6 +223,7 @@ export function Studio() {
         onApply={handleApplyPaperStock}
         onClose={() => setPaperConfigOpen(false)}
       />
+      <SharePopup open={shareOpen} url={shareUrlFor(paperStock)} onClose={() => setShareOpen(false)} />
     </div>
   );
 }

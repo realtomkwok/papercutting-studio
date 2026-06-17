@@ -27,7 +27,7 @@ The Figma file contains three screen-level frames: the **Editor** (this spec), a
 | Tool-parameter submenus | **TODO — not designed yet**; old slider state stays wired in `wireUi.tsx` for future use |
 | Rotate gesture | Click + drag (pointer deltaX → rotation delta, ~0.5°/px); smooth via `transition: transform 0.1s` on canvas wrapper |
 | New design guard | `window.confirm` if `cuts > 0 \|\| outlines > 0` before clearing |
-| Share button | Placeholder for now (TODO: navigate to separate Share screen) |
+| Share button | Switches to the **Preview & Share** screen (Figma 50:401): the engine enters the 3D unfold view and plays the reveal. Implemented in M6 — see "Preview & Share screen" below. |
 
 ---
 
@@ -357,6 +357,32 @@ export function App() {
    ```
 
 **Retained (hidden) state**: `stampSize`, `pencilWidth`, `eraserWidth`, `scissorsMargin`, `mode`, `unfoldProgress` — keep wired to engine for future popover sliders.
+
+---
+
+## Preview & Share screen
+
+> **Figma source**: [node 50:401 "Preview & Share"](https://www.figma.com/design/WFrsqSKE0foMLl1rxMWgqG/design?node-id=50-401)
+
+A second screen sharing the **same mounted engine** as the editor. `wireUi.tsx` holds a
+`screen: 'editor' | 'preview'` flag; switching screens only toggles the engine mode and swaps the
+surrounding chrome — `CanvasHost` (which owns the engine's canvases, including the Three.js view)
+stays mounted, so there is no remount/dispose.
+
+| Element | Component | Notes |
+|---------|-----------|-------|
+| Top bar | `PreviewTopBar` | Left "← Editor" returns to the editor; right "+ New design" clears + returns. Same three-column layout as `TopBar`. |
+| 3D view | (engine) | Entering calls `engine.setMode('unfold3d')` + `engine.playUnfold()`; leaving calls `setMode('draw')`. OrbitControls drive the rotate/zoom/pan. |
+| Instructions card | `InstructionsCard` | Floating top-left hint card (Figma 109:717): drag-to-rotate / scroll-to-zoom / right-drag-to-pan. |
+| Bottom bar | `PreviewBottomBar` | Floating Print / Save / Share (Figma 50:412). |
+| Share popup | `SharePopup` | Modal with the shareable link + copy-to-clipboard. |
+
+**Action wiring (M6 — minimal stubs; refinements tracked in `TODO.md`):**
+
+- **Print** → `window.print()` (M7 will replace with a to-scale print-preview dialog).
+- **Save** → downloads the current `paperStock` as JSON (to be extended to the full design).
+- **Share** → opens `SharePopup` with `?stock=<base64 JSON>`; `wireUi` reads that param back on load
+  to restore the paper stock (to be extended to the full design).
 
 ---
 
