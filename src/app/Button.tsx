@@ -98,7 +98,7 @@ export function Button(props: ButtonProps) {
   const iconStyle: CSSProperties = { fontSize: 20, lineHeight: 1, color: c.content };
   const labelStyle: CSSProperties = {
     fontSize: 14,
-    letterSpacing: '5.6px',
+    letterSpacing: '0.04em',
     textTransform: 'uppercase',
     lineHeight: 1,
     color: c.content,
@@ -164,7 +164,7 @@ export function Tooltip({ label }: { label: string }) {
         style={{
           fontFamily: FONT,
           fontSize: 10,
-          letterSpacing: '4px',
+          letterSpacing: '0.04em',
           textTransform: 'uppercase',
           color: C.popoverForeground,
           textAlign: 'center',

@@ -39,7 +39,7 @@ const heading: CSSProperties = {
   margin: 0,
   fontFamily: FONT,
   fontSize: 14,
-  letterSpacing: '5.6px',
+  letterSpacing: '0.04em',
   textTransform: 'uppercase',
   color: 'var(--color\\/foreground)',
 };

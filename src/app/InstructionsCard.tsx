@@ -29,7 +29,7 @@ const card: CSSProperties = {
 const heading: CSSProperties = {
   fontFamily: FONT,
   fontSize: 11,
-  letterSpacing: '4.4px',
+  letterSpacing: '0.04em',
   textTransform: 'uppercase',
   color: 'var(--color\\/popover-foreground)',
   whiteSpace: 'nowrap',
@@ -48,8 +48,8 @@ const lineText: CSSProperties = {
 const glyph: CSSProperties = { fontSize: 20, lineHeight: 1, color: 'var(--color\\/popover-foreground)' };
 
 const HINTS: { icon: string; text: string }[] = [
-  { icon: 'rotate_right', text: 'Drag to rotate' },
-  { icon: 'zoom_in', text: 'Scroll to zoom' },
+  { icon: '360', text: 'Drag to rotate' },
+  { icon: 'mouse', text: 'Scroll to zoom' },
   { icon: 'pan_tool', text: 'Right-drag to pan' },
 ];
 

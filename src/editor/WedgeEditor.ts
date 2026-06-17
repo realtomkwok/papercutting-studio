@@ -61,7 +61,7 @@ export class WedgeEditor {
    *  framed in the middle of the canvas rather than hung off its apex at the origin. */
   private frameCenter: Point = { x: 0, y: 0 };
   /** View-only rotation of the paper, in degrees (drawing convenience; geometry unaffected). */
-  private rotationDeg = 0;
+  private rotationDeg = 180;
   /** Anchor captured on rotate-tool pointer-down: cursor angle around the centre + the rotation then,
    *  so the drag turns the paper to follow the cursor (a real rotate handle) instead of reacting to
    *  horizontal movement alone — which reversed below the centre. */
@@ -204,10 +204,29 @@ export class WedgeEditor {
     const maxX = Math.max(...xs);
     const minY = Math.min(...ys);
     const maxY = Math.max(...ys);
-    const bw = Math.max(maxX - minX, 1e-6);
-    const bh = Math.max(maxY - minY, 1e-6);
     this.frameCenter = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
-    this.scale = 0.85 * Math.min(width / bw, height / bh) * this.zoom;
+
+    // Compute scale and canvas centre from the *rotated* bounding box so the wedge always fits
+    // and is centred regardless of rotation angle.
+    const r = (this.rotationDeg * Math.PI) / 180;
+    const cosR = Math.cos(r), sinR = Math.sin(r);
+    const rotated = verts.map((v) => {
+      const dx = v.x - this.frameCenter.x;
+      const dy = -(v.y - this.frameCenter.y); // y-flip matches unitToView
+      return { x: dx * cosR - dy * sinR, y: dx * sinR + dy * cosR };
+    });
+    const rxs = rotated.map((p) => p.x);
+    const rys = rotated.map((p) => p.y);
+    const minRX = Math.min(...rxs), maxRX = Math.max(...rxs);
+    const minRY = Math.min(...rys), maxRY = Math.max(...rys);
+    const rbw = Math.max(maxRX - minRX, 1e-6);
+    const rbh = Math.max(maxRY - minRY, 1e-6);
+    this.scale = 0.85 * Math.min(width / rbw, height / rbh) * this.zoom;
+    // Shift the canvas centre so the rotated bounding box is centred on screen.
+    this.center = new paper.Point(
+      width / 2 - ((minRX + maxRX) / 2) * this.scale,
+      height / 2 - ((minRY + maxRY) / 2) * this.scale,
+    );
 
     this.drawStatic();
     this.refresh();
@@ -269,11 +288,19 @@ export class WedgeEditor {
   private addLabel(text: string, at: Point): void {
     const label = new paper.PointText(this.unitToView(at));
     label.content = text;
-    // Match the rest of the chrome: foreground ink in the Shippori body typeface.
     label.fillColor = new paper.Color('#2e2926');
     label.fontFamily = 'Shippori Antique B1';
     label.fontSize = 11;
     label.justification = 'center';
+
+    // Tooltip-style pill background (mirrors the React Tooltip component: popover bg + border).
+    const p = 6;
+    const b = label.bounds;
+    const box = new paper.Path.Rectangle({ from: [b.left - p, b.top - p], to: [b.right + p, b.bottom + p] });
+    box.fillColor = new paper.Color('#f5f2ef');
+    box.strokeColor = new paper.Color('#9a9088');
+    box.strokeWidth = 1;
+    box.insertBelow(label);
   }
 
   /**

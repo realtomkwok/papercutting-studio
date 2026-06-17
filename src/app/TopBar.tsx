@@ -20,7 +20,7 @@ const bar: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   height: 42,
-  padding: '1px 16px',
+  padding: '0 16px',
   gap: 10,
   background: C.card,
   borderBottom: `1px solid ${C.border}`,
@@ -38,7 +38,7 @@ const title: CSSProperties = {
   textAlign: 'center',
   fontFamily: "'Shippori Antique B1', serif",
   fontSize: 'var(--sds-typography-subheading-size-small)',
-  letterSpacing: '6.4px',
+  letterSpacing: '0.04em',
   textTransform: 'uppercase',
   color: C.foreground,
 };
@@ -54,8 +54,8 @@ export function TopBar({ onNew, onImport, onShare }: TopBarProps) {
     <div style={bar}>
       {/* Left: new + import */}
       <div style={col}>
-        <Button type="icon" icon="add_2" title="New design" ariaLabel="New design" onClick={onNew} />
-        <Button type="icon-text" icon="publish" label="Import Design" onClick={onImport} />
+        <Button type="icon" icon="add_2" title="New design" ariaLabel="New design" onClick={onNew} style={{ borderBottom: 'none' }} />
+        <Button type="icon-text" icon="publish" label="Import Design" onClick={onImport} style={{ borderBottom: 'none' }} />
       </div>
 
       {/* Centre: title */}
@@ -63,7 +63,7 @@ export function TopBar({ onNew, onImport, onShare }: TopBarProps) {
 
       {/* Right: share */}
       <div style={{ ...col, justifyContent: 'flex-end' }}>
-        <Button type="icon-text" icon="arrow_forward" iconRight label="Share" onClick={onShare} />
+        <Button type="icon-text" icon="arrow_forward" iconRight label="Share" onClick={onShare} style={{ borderBottom: 'none' }} />
       </div>
     </div>
   );

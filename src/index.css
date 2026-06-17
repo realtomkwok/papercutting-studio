@@ -9,42 +9,70 @@
 @import 'material-symbols/outlined';
 
 :root {
-  /* Semantic */
-  --color\/background: #f5f2ef;
-  --color\/card: #eae4dc;
-  --color\/border: #9a9088;
-  --color\/foreground: #2e2926;
-  --color\/secondary-foreground: #524a44;
-  /* Button/control semantics (Figma 34:40, 75:680) */
-  --color\/primary: #2e2926;
-  --color\/primary-foreground: #f5f2ef;
-  --color\/muted: #d4ccc0;
-  --color\/muted-foreground: #9a9088;
-  --color\/popover: #f5f2ef;
-  --color\/popover-foreground: #2e2926;
-  --color\/input: #d4ccc0;
-  --color\/accent: #c85c4a;
-
-  /* Paper colours */
-  --paper\/coral-red: #c85c4a;
-
-  /* Neutral palette */
+  /* ── Neutral palette ── */
   --neutral\/warm-white: #f5f2ef;
-  --neutral\/linen: #eae4dc;
-  --neutral\/parchment: #d4ccc0;
-  --neutral\/warm-silver: #b8afa2;
+  --neutral\/linen: #eae2dc;
+  --neutral\/parchment: #d4c8c0;
+  --neutral\/warm-silver: #b8aba2;
   --neutral\/stone: #9a9088;
   --neutral\/driftwood: #7a706a;
   --neutral\/charcoal-clay: #524a44;
   --neutral\/ink: #2e2926;
 
-  /* SDS typography scale */
-  --sds-typography-heading-size-base: 24px;
-  --sds-typography-subheading-size-small: 16px;
-  --sds-typography-body-size-medium: 16px;
-  --sds-typography-body-size-small: 14px;
+  /* ── Paper (accent) palette ── */
+  --paper\/coral-red: #c85c4a;
+  --paper\/dusty-rose: #c07676;
+  --paper\/blush-pink: #d4a5a0;
+  --paper\/warm-lavender: #b8a8c8;
+  --paper\/soft-purple: #9a8ab0;
+  --paper\/muted-violet: #8875ad;
+  --paper\/steel-blue: #8090a4;
+  --paper\/powder-blue: #a4b8c4;
+  --paper\/pale-sky: #b8c8d4;
+  --paper\/sage-green: #8aa880;
+  --paper\/olive-green: #849878;
+  --paper\/moss-green: #789a68;
+  --paper\/warm-taupe: #b8a490;
+  --paper\/golden-sand: #c2a068;
+  --paper\/dusty-gold: #a89050;
+  --paper\/warm-ivory: #d0c0a0;
 
-  /* SDS spacing */
+  /* ── Semantic: surface & background ── */
+  --color\/background: #f5f2ef;
+  --color\/card: #eae2dc;
+  --color\/popover: #f5f2ef;
+  --color\/secondary: #eae2dc;
+  --color\/muted: #d4c8c0;
+  --color\/input: #eae2dc;
+
+  /* ── Semantic: text & foreground ── */
+  --color\/foreground: #2e2926;
+  --color\/card-foreground: #2e2926;
+  --color\/popover-foreground: #2e2926;
+  --color\/primary-foreground: #f5f2ef;
+  --color\/secondary-foreground: #524a44;
+  --color\/muted-foreground: #9a9088;
+
+  /* ── Semantic: primary action & form ── */
+  --color\/primary: #2e2926;
+  --color\/ring: #2e2926;
+  --color\/border: #9a9088;
+
+  /* ── Semantic: accent ── */
+  --color\/accent: #c85c4a;
+  --color\/accent-violet: #8875ad;
+  --color\/accent-blue: #8090a4;
+  --color\/accent-green: #8aa880;
+  --color\/accent-sand: #c2a068;
+
+  /* ── Semantic: destructive ── */
+  --color\/destructive: #c85c4a;
+  --color\/destructive-foreground: #f5f2ef;
+
+  /* ── Shadow ── */
+  --color\/shadow\/10: rgba(46,41,38,0.10);
+
+  /* ── Spacing ── */
   --sds-size-space-1200: 48px;
 }
 
@@ -73,4 +101,29 @@ body {
 #root {
   width: 100vw;
   height: 100vh;
+}
+
+/* ── Print: show only the instruction sheet ──────────────────────────────── */
+@media print {
+  /* Invisibilise everything; .print-layout punches back through with visibility:visible. */
+  body * {
+    visibility: hidden;
+  }
+  .print-layout,
+  .print-layout * {
+    visibility: visible;
+  }
+  /* Position at top-left of the page. Width/height are set inline (mm) from the chosen spec. */
+  .print-layout {
+    position: absolute;
+    top: 0;
+    left: 0;
+    margin: 0;
+    padding: 0;
+    box-shadow: none !important;
+  }
+  /* Page size is injected dynamically by PrintDialog before calling window.print(). */
+  @page {
+    margin: 0;
+  }
 }

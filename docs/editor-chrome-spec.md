@@ -41,38 +41,117 @@ Add to `index.html` `<style>` or `src/index.css`:
 @import url('https://fonts.googleapis.com/css2?family=Shippori+Antique+B1&display=swap');
 
 :root {
-  /* Semantic */
-  --color\/background:            #f5f2ef;
-  --color\/card:                  #eae4dc;
-  --color\/border:                #9a9088;
-  --color\/foreground:            #2e2926;
-  --color\/secondary-foreground:  #524a44;
-
-  /* Paper colours */
-  --paper\/coral-red:             #c85c4a;
-
-  /* Neutral palette */
+  /* ── Neutral palette ── */
   --neutral\/warm-white:          #f5f2ef;
-  --neutral\/linen:               #eae4dc;
-  --neutral\/parchment:           #d4ccc0;
-  --neutral\/warm-silver:         #b8afa2;
+  --neutral\/linen:               #eae2dc;
+  --neutral\/parchment:           #d4c8c0;
+  --neutral\/warm-silver:         #b8aba2;
   --neutral\/stone:               #9a9088;
   --neutral\/driftwood:           #7a706a;
   --neutral\/charcoal-clay:       #524a44;
   --neutral\/ink:                 #2e2926;
 
-  /* SDS typography scale */
-  --sds-typography-heading-size-base:        24px;
-  --sds-typography-subheading-size-small:    16px;
-  --sds-typography-body-size-medium:         16px;
-  --sds-typography-body-size-small:          14px;
+  /* ── Paper (accent) palette ── */
+  --paper\/coral-red:             #c85c4a;
+  --paper\/dusty-rose:            #c07676;
+  --paper\/blush-pink:            #d4a5a0;
+  --paper\/warm-lavender:         #b8a8c8;
+  --paper\/soft-purple:           #9a8ab0;
+  --paper\/muted-violet:          #8875ad;
+  --paper\/steel-blue:            #8090a4;
+  --paper\/powder-blue:           #a4b8c4;
+  --paper\/pale-sky:              #b8c8d4;
+  --paper\/sage-green:            #8aa880;
+  --paper\/olive-green:           #849878;
+  --paper\/moss-green:            #789a68;
+  --paper\/warm-taupe:            #b8a490;
+  --paper\/golden-sand:           #c2a068;
+  --paper\/dusty-gold:            #a89050;
+  --paper\/warm-ivory:            #d0c0a0;
 
-  /* SDS spacing */
-  --sds-size-space-1200: 48px;
+  /* ── Semantic: surface & background ── */
+  --color\/background:            #f5f2ef;
+  --color\/card:                  #eae2dc;
+  --color\/popover:               #f5f2ef;
+  --color\/secondary:             #eae2dc;
+  --color\/muted:                 #d4c8c0;
+  --color\/input:                 #eae2dc;
+
+  /* ── Semantic: text & foreground ── */
+  --color\/foreground:            #2e2926;
+  --color\/card-foreground:       #2e2926;
+  --color\/popover-foreground:    #2e2926;
+  --color\/primary-foreground:    #f5f2ef;
+  --color\/secondary-foreground:  #524a44;
+  --color\/muted-foreground:      #9a9088;
+
+  /* ── Semantic: primary action & form ── */
+  --color\/primary:               #2e2926;
+  --color\/ring:                  #2e2926;
+  --color\/border:                #9a9088;
+
+  /* ── Semantic: accent ── */
+  --color\/accent:                #c85c4a;
+  --color\/accent-violet:         #8875ad;
+  --color\/accent-blue:           #8090a4;
+  --color\/accent-green:          #8aa880;
+  --color\/accent-sand:           #c2a068;
+
+  /* ── Semantic: destructive ── */
+  --color\/destructive:           #c85c4a;
+  --color\/destructive-foreground:#f5f2ef;
+
+  /* ── Shadow ── */
+  --color\/shadow\/10:            rgba(46,41,38,0.20);
+
+  /* ── Spacing ── */
+  --sds-size-space-1200:          48px;
 }
 ```
 
-**Letter-spacing rule**: 40% of font-size (24px → 9.6px, 16px → 6.4px, 14px → 5.6px).
+**Letter-spacing rule**: Figma stores letter-spacing in ls units; divide by 1000 for CSS `em`
+(ls 40 → `0.04em`, ls 20 → `0.02em`, ls 1 → `0.001em`, ls 0 → `0`).
+Most UI text (buttons, labels, headings) uses ls 40 = `0.04em`; body copy and footnotes use ls 0.
+
+### Typography Scale
+
+| Token | Size | Letter-spacing | Usage |
+|-------|------|---------------|-------|
+| `Typography/Headings/Display` | 72px | 0.04em | Hero headlines |
+| `Typography/Headings/H1` | 48px | 0.024em | Page heading |
+| `Typography/Headings/H2` | 36px | 0.02em | Section heading |
+| `Typography/Headings/H3` | 24px | 0.04em | Sub-section heading |
+| `Typography/Headings/H4` | 20px | 0.04em | Card title |
+| `Typography/Body/Body Large` | 16px | 0.04em | Lead paragraphs, TopBar title |
+| `Typography/Body/Body` | 14px | 0 | Default body text |
+| `Typography/Button` | 14px | 0.04em | Button labels |
+| `Typography/Caption` | 10px | 0.001em | Metadata, timestamps |
+| `Typography/Button Small` | 10px | 0.04em | Compact button labels |
+| `Typography/Body/Body Small` | 12px | 0 | Secondary body |
+| `Typography/Label` | 11px | 0.04em | Form labels, status chips |
+| `Typography/Eyebrow` | 9px | 0.04em | Section kickers |
+| `Typography/Footnote` | 8px | 0 | Fine print |
+
+All styles: Shippori Antique B1, Regular (400), `line-height: 1` (except `Typography/Body/Body` which uses `line-height: 1.5`), `text-transform: uppercase` where indicated by context.
+
+### Elevation
+
+```css
+/* Elevation/1 — Subtle (cards, panel resting state) */
+box-shadow:
+  0px 1px 3px rgba(46,41,38,0.06),
+  0px 2px 1.5px rgba(46,41,38,0.19);
+
+/* Elevation/2 — Raised (dropdowns, tooltips) */
+box-shadow:
+  0px 4px 13px rgba(46,41,38,0.10),
+  0px 4px 4.2px rgba(46,41,38,0.10);
+
+/* Elevation/3 — Floating (modals, popovers) */
+box-shadow:
+  0px 12px 48px 12px rgba(46,41,38,0.10),
+  0px 8px 10px rgba(46,41,38,0.28);
+```
 
 **Dotted-grid canvas background** (inline on `<main>` in `wireUi.tsx`):
 ```css
@@ -114,22 +193,22 @@ export interface PaperProperties {
 }
 
 export const COLOR_PRESET_HEX: Record<ColorPreset, string> = {
-  'coral-red':     '#c95c4a',
-  'dusty-rose':    '#c97a7a',
-  'blush-pink':    '#d4a0a0',
+  'coral-red':     '#c85c4a',
+  'dusty-rose':    '#c07676',
+  'blush-pink':    '#d4a5a0',
   'warm-lavender': '#b8a8c8',
   'soft-purple':   '#9a8ab0',
-  'muted-violet':  '#8878a0',
-  'steel-blue':    '#8898b8',
-  'powder-blue':   '#a8bed0',
-  'pale-sky':      '#c0d0dc',
-  'sage-green':    '#9aaa90',
-  'olive-green':   '#8a9878',
-  'moss-green':    '#7a8a68',
-  'warm-taupe':    '#b8a890',
-  'golden-sand':   '#c8b080',
-  'dusty-gold':    '#b89a60',
-  'warm-ivory':    '#d8c8b0',
+  'muted-violet':  '#8875ad',
+  'steel-blue':    '#8090a4',
+  'powder-blue':   '#a4b8c4',
+  'pale-sky':      '#b8c8d4',
+  'sage-green':    '#8aa880',
+  'olive-green':   '#849878',
+  'moss-green':    '#789a68',
+  'warm-taupe':    '#b8a490',
+  'golden-sand':   '#c2a068',
+  'dusty-gold':    '#a89050',
+  'warm-ivory':    '#d0c0a0',
 };
 ```
 
@@ -177,8 +256,8 @@ App  (100vw × 100vh, no internal header)
 Presentational. Props: `{ onNew: () => void; onImport: () => void; onShare: () => void }`.
 
 **Typography:**
-- Title: Shippori Antique B1, 16px (`--sds-typography-subheading-size-small`), letter-spacing 6.4px, uppercase
-- Buttons: Shippori Antique B1, 14px (`--sds-typography-body-size-small`), letter-spacing 5.6px, uppercase
+- Title: Shippori Antique B1, 16px (`Typography/Body Large`), `letter-spacing: 0.04em`, uppercase
+- Buttons: Shippori Antique B1, 14px (`Typography/Button`), `letter-spacing: 0.04em`, uppercase
 
 **Structure** (three-column flex, each `flex: 1`):
 - **Left**: 40×40 icon button (material `add_2`, 20px), then "Import Design" button (material `publish` + label).
@@ -267,7 +346,7 @@ export function PreviewPanel() {
     }}>
       <span style={{
         fontFamily: "'Shippori Antique B1', serif",
-        fontSize: 14, letterSpacing: '5.6px',
+        fontSize: 14, letterSpacing: '0.04em',
         textTransform: 'uppercase', color: 'var(--color\/border)',
       }}>Preview</span>
     </div>

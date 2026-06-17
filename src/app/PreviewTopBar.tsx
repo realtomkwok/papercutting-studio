@@ -38,7 +38,7 @@ const title: CSSProperties = {
   textAlign: 'center',
   fontFamily: "'Shippori Antique B1', serif",
   fontSize: 'var(--sds-typography-subheading-size-small)',
-  letterSpacing: '6.4px',
+  letterSpacing: '0.04em',
   textTransform: 'uppercase',
   color: C.foreground,
 };

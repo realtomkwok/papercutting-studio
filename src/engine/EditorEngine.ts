@@ -8,6 +8,7 @@ import paper from 'paper';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type {
+  DesignState,
   EditorEngine,
   EngineEvent,
   EngineEventPayload,
@@ -72,6 +73,7 @@ export class PaperCuttingEngine implements EditorEngine {
   private rafId: number | null = null;
   private unfoldProgress = 1;
   private playStart: number | null = null; // timestamp while playUnfold animates; null when idle
+  private stockProps: PaperStockProps = {}; // mirrors what was last passed to setPaperStock
 
   constructor() {
     this.model = new EditorModel({
@@ -435,9 +437,36 @@ export class PaperCuttingEngine implements EditorEngine {
   }
 
   setPaperStock(props: PaperStockProps): void {
+    this.stockProps = props;
     // Re-bake the paper-shaders colour map + crease composite for the new stock; the baker repaints
     // the 3D view via its onBaked callback when the (async) render completes.
     void this.paperBaker?.bake(props);
+  }
+
+  getDesignState(): DesignState {
+    return {
+      version: 1,
+      foldId: this.fold.id,
+      cuts: this.model.composedContours.map((c) => c.map((p) => ({ x: p.x, y: p.y }))),
+      strokes: this.model.strokes.map((s) => s.map((p) => ({ x: p.x, y: p.y }))),
+      stock: this.stockProps,
+    };
+  }
+
+  loadDesignState(state: DesignState): void {
+    this.model.clear();
+    if (state.foldId !== this.fold.id) this.loadFoldConfig(state.foldId);
+    // Replay each cut as an individual committed path (same path as addCutPath).
+    for (const cut of state.cuts) this.model.commit(cut);
+    for (const stroke of state.strokes) this.model.drawStroke(stroke);
+    if (state.stock) {
+      this.stockProps = state.stock;
+      void this.paperBaker?.bake(state.stock);
+    }
+  }
+
+  getPreviewImageUrl(): string | null {
+    return this.previewCanvas?.toDataURL('image/png') ?? null;
   }
 
   undo(): void {

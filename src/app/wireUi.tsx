@@ -20,9 +20,11 @@ import { PreviewPanel } from './PreviewPanel';
 import { InstructionsCard } from './InstructionsCard';
 import { PreviewBottomBar } from './PreviewBottomBar';
 import { SharePopup } from './SharePopup';
+import { PrintDialog } from './PrintDialog';
 import { PaperStockConfigurator } from './PaperStockConfigurator';
 import { PaperCuttingEngine } from '../engine/EditorEngine';
-import type { EngineTool, PaperStockProps } from '../engine/api';
+import { symmetricalTriangle } from '../core/foldConfig';
+import type { DesignState, EngineTool, PaperStockProps } from '../engine/api';
 import type { ColorPreset, PaperProperties } from './types';
 import { COLOR_PRESET_HEX } from './types';
 
@@ -36,19 +38,22 @@ const PRESET_BY_HEX = new Map<string, ColorPreset>(
 
 type Screen = 'editor' | 'preview';
 
-/** Build a preview link that round-trips the paper stock through the URL (`?stock=<base64 JSON>`). */
-function shareUrlFor(stock: PaperStockProps): string {
+/** Build a share link encoding the full design state (`?design=<base64 JSON>`). */
+function shareUrlFor(state: DesignState): string {
   const { origin, pathname } = window.location;
-  const encoded = encodeURIComponent(btoa(JSON.stringify(stock)));
-  return `${origin}${pathname}?stock=${encoded}`;
+  const encoded = encodeURIComponent(btoa(JSON.stringify(state)));
+  return `${origin}${pathname}?design=${encoded}`;
 }
 
-/** Read a `?stock=` param back into a PaperStockProps, or `null` if absent/invalid. */
-function stockFromUrl(): PaperStockProps | null {
+/** Read a `?design=` (or legacy `?stock=`) param from the URL, or `null` if absent/invalid. */
+function designFromUrl(): DesignState | PaperStockProps | null {
   try {
-    const raw = new URLSearchParams(window.location.search).get('stock');
-    if (!raw) return null;
-    return JSON.parse(atob(decodeURIComponent(raw))) as PaperStockProps;
+    const params = new URLSearchParams(window.location.search);
+    const design = params.get('design');
+    if (design) return JSON.parse(atob(decodeURIComponent(design))) as DesignState;
+    const stock = params.get('stock');
+    if (stock) return JSON.parse(atob(decodeURIComponent(stock))) as PaperStockProps;
+    return null;
   } catch {
     return null;
   }
@@ -69,6 +74,8 @@ export function Studio() {
   // Mirrors the M5 paper stock the engine bakes (seeds the configurator); {} = engine defaults.
   const [paperStock, setPaperStock] = useState<PaperStockProps>({});
   const [paperConfigOpen, setPaperConfigOpen] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
+  const [printPreviewUrl, setPrintPreviewUrl] = useState<string | null>(null);
   // Tool-parameter state, surfaced by the Selected-tool submenu sliders (pencil width, stamp size,
   // scissors cut-fit). Defaults mirror what the engine is seeded with on mount.
   const [pencilWidth, setPencilWidth] = useState(1.6);
@@ -86,9 +93,16 @@ export function Studio() {
     engine.setPencilWidth(pencilWidth);
     engine.setEraserWidth(0.025);
     engine.setScissorsMargin(scissorsMargin);
-    // Restore a shared design from the URL (the Share popup writes `?stock=`).
-    const fromUrl = stockFromUrl();
-    if (fromUrl) handleApplyPaperStock(fromUrl);
+    // Restore a shared design from the URL (?design= full state, or legacy ?stock= stock only).
+    const fromUrl = designFromUrl();
+    if (fromUrl && 'version' in fromUrl) {
+      // Full DesignState from ?design=
+      engine.loadDesignState(fromUrl);
+      handleApplyPaperStock(fromUrl.stock);
+    } else if (fromUrl) {
+      // Legacy ?stock= — only restores paper stock
+      handleApplyPaperStock(fromUrl as PaperStockProps);
+    }
     return () => unsubs.forEach((u) => u());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine]);
@@ -148,11 +162,19 @@ export function Studio() {
   };
 
   // ── Preview & Share actions ───────────────────────────────────────────────────────────────────
-  // Print: M7 will produce a to-scale fold template with guides; until then, the browser print dialog.
-  const handlePrint = () => window.print();
-  // Save: download the design's JSON config (the paper stock that re-bakes the look).
+  // Print: open the print-preview dialog (M7) showing the to-scale instruction sheet.
+  const handlePrint = () => {
+    setPrintPreviewUrl(engine.getPreviewImageUrl());
+    setPrintOpen(true);
+  };
+  // Save: download the full design state as JSON (cuts + fold + stock + tool params).
   const handleSave = () => {
-    const blob = new Blob([JSON.stringify(paperStock, null, 2)], { type: 'application/json' });
+    const state = engine.getDesignState();
+    const config = {
+      ...state,
+      toolParams: { pencilWidth, stampSize, scissorsMargin },
+    };
+    const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -193,7 +215,6 @@ export function Studio() {
               activeTool={tool}
               canUndo={history.canUndo}
               canRedo={history.canRedo}
-              paperProperties={paperProperties}
               pencilWidth={pencilWidth}
               stampSize={stampSize}
               scissorsMargin={scissorsMargin}
@@ -223,7 +244,17 @@ export function Studio() {
         onApply={handleApplyPaperStock}
         onClose={() => setPaperConfigOpen(false)}
       />
-      <SharePopup open={shareOpen} url={shareUrlFor(paperStock)} onClose={() => setShareOpen(false)} />
+      <SharePopup
+        open={shareOpen}
+        url={shareUrlFor(engine.getDesignState())}
+        onClose={() => setShareOpen(false)}
+      />
+      <PrintDialog
+        open={printOpen}
+        fold={symmetricalTriangle}
+        previewImageUrl={printPreviewUrl}
+        onClose={() => setPrintOpen(false)}
+      />
     </div>
   );
 }

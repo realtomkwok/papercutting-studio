@@ -10,6 +10,19 @@ import type { Point } from '../core/geometry';
 
 export type EngineMode = 'draw' | 'preview' | 'unfold3d';
 
+/** Serialisable snapshot of the full design — cuts, pending ink, fold config, paper stock.
+ *  Used for JSON export (Save) and URL encoding (Share). Re-load via `loadDesignState`. */
+export interface DesignState {
+  readonly version: 1;
+  /** `FoldConfig.id` — the fold template. */
+  readonly foldId: string;
+  /** Committed cut contours in unit-square coords (the composed removed-material regions). */
+  readonly cuts: readonly (readonly Point[])[];
+  /** Pending pencil ink strokes in unit-square coords. */
+  readonly strokes: readonly (readonly Point[])[];
+  readonly stock: PaperStockProps;
+}
+
 /** The drawing/cutting tools. `freehand` is the pencil (sketches ink lines); the stamp kinds drop a
  *  saved unit pattern as a closed ink loop; `scissors` cuts out the enclosed areas the sketch seals
  *  off; `erase` rubs out pencil ink (never the committed cuts). */
@@ -115,6 +128,12 @@ export interface EditorEngine {
   undo(): void;
   redo(): void;
   exportPattern(format: ExportFormat): Promise<Blob>;
+  /** Snapshot the current design (cuts + strokes + stock). For Save and Share. */
+  getDesignState(): DesignState;
+  /** Restore a previously saved design state: replays cuts + strokes + applies stock. */
+  loadDesignState(state: DesignState): void;
+  /** PNG data URL of the live 2D unfold preview canvas (for the print instructions sheet). */
+  getPreviewImageUrl(): string | null;
 
   // events (engine → UI)
   on<E extends EngineEvent>(event: E, cb: (payload: EngineEventPayload[E]) => void): Unsubscribe;

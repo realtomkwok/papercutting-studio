@@ -1,15 +1,14 @@
 /**
  * Toolbar — the floating visual tool picker at the bottom of the editor (editor-chrome-spec.md
- * §Toolbar, Figma 35:84 + tool states 42:146 + submenu 75:680). Purely presentational.
+ * §Toolbar, Figma 35:84 + tool states 109:1383 + submenu 75:680). Purely presentational.
  *
- * Structure: a fixed-height **clip container** (overflow:hidden) bottom-anchored to the viewport, with
- * the card **band** at its base. Tools are taller than the band, so they stick up into the container
- * (and their bases overflow below, clipped) while the hover tooltip / selected submenu float above —
- * all bounded by the container, so nothing spills loose over the canvas.
+ * Structure: a fixed-height **clip container** (overflow:hidden) bottom-anchored to the viewport,
+ * with the card **band** at its base. Tools are taller than the band, so they stick up into the
+ * container (and their bases overflow below, clipped) while the hover tooltip / selected submenu
+ * float above — all bounded by the container, so nothing spills loose over the canvas.
  *
  * Three states per tool (Figma `state` variant): Active (resting) · Hover (lift + name tooltip) ·
- * Selected (the active tool: subtle shadow + its parameter submenu — a functional slider for
- * pencil→width, stamp→size, scissors→fit).
+ * Selected (the active tool: subtle shadow + its parameter submenu — stamp→size only for now).
  *
  * Each tool art is a tight bbox **frame** with the source SVG overflowing it via negative insets
  * (exactly as Figma lays it out), so every icon keeps its true proportions instead of being shrunk
@@ -21,13 +20,11 @@
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { EngineTool } from '../engine/api';
-import type { PaperProperties } from './types';
-import { COLOR_PRESET_HEX } from './types';
 import { Button, Tooltip } from './Button';
 import pencilIcon from '../assets/icons/tool-pencil.svg';
+import eraserIcon from '../assets/icons/tool-eraser.svg';
 import stampIcon from '../assets/icons/tool-stamp.svg';
 import scissorsIcon from '../assets/icons/tool-scissors.svg';
-import rotateIcon from '../assets/icons/tool-rotate.svg';
 
 const C = {
   background: 'var(--color\\/background)',
@@ -36,10 +33,6 @@ const C = {
   foreground: 'var(--color\\/foreground)',
   secondaryForeground: 'var(--color\\/secondary-foreground)',
   input: 'var(--color\\/input)',
-  parchment: 'var(--neutral\\/parchment)',
-  warmWhite: 'var(--neutral\\/warm-white)',
-  linen: 'var(--neutral\\/linen)',
-  ink: 'var(--neutral\\/ink)',
 } as const;
 
 const FONT = "'Shippori Antique B1', serif";
@@ -50,7 +43,6 @@ export interface ToolbarProps {
   readonly activeTool: EngineTool;
   readonly canUndo: boolean;
   readonly canRedo: boolean;
-  readonly paperProperties: PaperProperties;
   readonly pencilWidth: number;
   readonly stampSize: number;
   readonly scissorsMargin: number;
@@ -65,10 +57,10 @@ export interface ToolbarProps {
 // ── tool art: tight-bbox frame + source SVG overflowing it via negative insets (Figma 35:84) ──
 type Art = { src: string; w: number; h: number; inset: [number, number, number, number] }; // inset %: T R B L
 const ART: Record<string, Art> = {
-  pencil: { src: pencilIcon, w: 36, h: 136, inset: [-5.1, -39.17, -13.31, -39.17] },
-  stamp: { src: stampIcon, w: 87.6, h: 127, inset: [-7.95, -16.1, -14.25, -16.1] },
-  scissors: { src: scissorsIcon, w: 88, h: 144, inset: [-2.66, -10.69, -9.33, -10.69] },
-  hand: { src: rotateIcon, w: 122, h: 140, inset: [-7.23, -11.14, -12.96, -11.55] },
+  pencil:   { src: pencilIcon,   w: 36,  h: 136, inset: [-5.1, -39.17, -13.31, -39.17] },
+  eraser:   { src: eraserIcon,   w: 65,  h: 104, inset: [-7, 0, 0, 0] },
+  stamp:    { src: stampIcon,    w: 87.6, h: 127, inset: [-7.95, -16.1, -14.25, -16.1] },
+  scissors: { src: scissorsIcon, w: 88,  h: 144, inset: [-2.66, -10.69, -9.33, -10.69] },
 };
 
 // ── per-tool config ──────────────────────────────────────────────────────────
@@ -76,12 +68,12 @@ type SubmenuParam = { tag: string; min: number; max: number; step: number };
 type Entry = { key: string; tool?: EngineTool; label: string; param?: SubmenuParam };
 
 const ENTRIES: Entry[] = [
-  { key: 'paper', label: 'colour' },
-  { key: 'pencil', tool: 'freehand', label: 'pencil', param: { tag: 'width', min: 1, max: 8, step: 0.5 } },
-  { key: 'eraser', tool: 'erase', label: 'eraser' },
-  { key: 'stamp', tool: 'circle', label: 'stamp', param: { tag: 'size', min: 0.03, max: 0.25, step: 0.005 } },
-  { key: 'scissors', tool: 'scissors', label: 'scissors', param: { tag: 'fit', min: -0.03, max: 0.03, step: 0.002 } },
-  { key: 'hand', tool: 'rotate', label: 'hand' },
+  { key: 'pencil',   tool: 'freehand', label: 'pencil'
+    /* param: { tag: 'width', min: 1, max: 8, step: 0.5 } — restore when submenu is ready */ },
+  { key: 'eraser',   tool: 'erase',    label: 'eraser' },
+  { key: 'stamp',    tool: 'circle',   label: 'stamp',   param: { tag: 'size', min: 0.03, max: 0.25, step: 0.005 } },
+  { key: 'scissors', tool: 'scissors', label: 'scissors'
+    /* param: { tag: 'fit', min: -0.03, max: 0.03, step: 0.002 } — restore when submenu is ready */ },
 ];
 
 // ── shared styles ────────────────────────────────────────────────────────────
@@ -133,12 +125,31 @@ const toolButton: CSSProperties = {
   justifyContent: 'center',
 };
 
-// Warm ink-tinted shadows (Figma #2E2926); the tool lifts and the shadow grows on hover, settles low
-// when selected. Transitioned on the art wrapper so state changes animate.
+// Figma elevation tokens (Elevation/1 → /3). Multi-layer shadows simulate depth of a tall object.
+// color/shadow/10 = rgba(46,41,38,0.2)
 function shadowFor(state: 'active' | 'hover' | 'selected'): string {
-  if (state === 'hover') return 'drop-shadow(0px 12px 13px rgba(46,41,38,0.22))';
-  if (state === 'selected') return 'drop-shadow(0px 2px 4px rgba(46,41,38,0.10))';
-  return 'drop-shadow(0px 4px 6px rgba(46,41,38,0.13))';
+  const c = 'rgba(46,41,38,0.2)';
+  if (state === 'hover') {
+    return [
+      `drop-shadow(0px 0.7px 0.35px ${c})`,
+      `drop-shadow(-0.1px 5px 2.55px ${c})`,
+      `drop-shadow(-0.1px 13.4px 6.85px ${c})`,
+      `drop-shadow(-0.4px 31.8px 16.2px ${c})`,
+      `drop-shadow(-0.7px 66.7px 34px ${c})`,
+    ].join(' ');
+  }
+  if (state === 'selected') {
+    return [
+      `drop-shadow(0px 0.7px 0.35px ${c})`,
+      `drop-shadow(0px 3.1px 1.6px ${c})`,
+      `drop-shadow(-0.1px 13.2px 6.75px ${c})`,
+    ].join(' ');
+  }
+  // active — Elevation/1
+  return [
+    `drop-shadow(0px 0.7px 0.35px ${c})`,
+    `drop-shadow(0px 2.6px 1.35px ${c})`,
+  ].join(' ');
 }
 
 function liftFor(state: 'active' | 'hover' | 'selected'): string {
@@ -151,7 +162,7 @@ function popover(interactive: boolean): CSSProperties {
   return {
     position: 'absolute',
     left: '50%',
-    bottom: 134, // sits clear above the tool with breathing room; clipped by the container if it exceeds
+    bottom: 134,
     transform: 'translate(-50%, 0)',
     zIndex: 2,
     pointerEvents: interactive ? 'auto' : 'none',
@@ -174,7 +185,7 @@ function ToolArt({ art }: { art: Art }) {
 const tagText: CSSProperties = {
   fontFamily: FONT,
   fontSize: 14,
-  letterSpacing: '5.6px',
+  letterSpacing: '0.04em',
   textTransform: 'uppercase',
   color: C.secondaryForeground,
   whiteSpace: 'nowrap',
@@ -182,7 +193,7 @@ const tagText: CSSProperties = {
 const minMaxText: CSSProperties = {
   fontFamily: FONT,
   fontSize: 10,
-  letterSpacing: '4px',
+  letterSpacing: '0.04em',
   textTransform: 'uppercase',
   color: C.foreground,
 };
@@ -262,49 +273,9 @@ function Submenu({ param, value, onChange }: { param: SubmenuParam; value: numbe
   );
 }
 
-// ── tool inner visuals ───────────────────────────────────────────────────────
-function PaperCard({ color }: { color: string }) {
-  return (
-    <div style={{ transform: 'rotate(-3deg)' }}>
-      <div style={{ width: 101, height: 143, background: color }} />
-    </div>
-  );
-}
-
-function Eraser() {
-  const rect = (s: CSSProperties): CSSProperties => ({ gridArea: '1 / 1', border: `1px solid ${C.ink}`, ...s });
-  return (
-    <span
-      style={{
-        display: 'inline-grid',
-        gridTemplateColumns: 'max-content',
-        gridTemplateRows: 'max-content',
-        placeItems: 'start',
-        lineHeight: 0,
-      }}
-    >
-      <span style={rect({ width: 65, height: 104, marginTop: 64, marginLeft: 0, background: C.parchment })} />
-      <span style={rect({ width: 50, height: 104, marginTop: 64, marginLeft: 15, background: C.parchment, borderTopLeftRadius: 4, borderBottomLeftRadius: 4 })} />
-      <span style={rect({ width: 61, height: 64, marginTop: 0, marginLeft: 2, background: C.warmWhite, borderTopLeftRadius: 12, borderTopRightRadius: 12 })} />
-      <span
-        style={{
-          gridArea: '1 / 1',
-          width: 24,
-          height: 104,
-          marginTop: 64,
-          marginLeft: 23,
-          background: C.linen,
-          borderTop: `1px solid ${C.ink}`,
-          borderBottom: `1px solid ${C.ink}`,
-        }}
-      />
-    </span>
-  );
-}
-
 // ── component ────────────────────────────────────────────────────────────────
 export function Toolbar(props: ToolbarProps) {
-  const { activeTool, canUndo, canRedo, paperProperties, onUndo, onRedo, onTool } = props;
+  const { activeTool, canUndo, canRedo, onUndo, onRedo, onTool } = props;
   const [hovered, setHovered] = useState<string | null>(null);
 
   const paramValue = (e: Entry): number => {
@@ -321,16 +292,8 @@ export function Toolbar(props: ToolbarProps) {
   };
 
   const renderInner = (key: string) => {
-    switch (key) {
-      case 'paper':
-        return <PaperCard color={COLOR_PRESET_HEX[paperProperties.colorPreset]} />;
-      case 'eraser':
-        return <Eraser />;
-      default: {
-        const art = ART[key];
-        return art ? <ToolArt art={art} /> : null;
-      }
-    }
+    const art = ART[key];
+    return art ? <ToolArt art={art} /> : null;
   };
 
   return (
