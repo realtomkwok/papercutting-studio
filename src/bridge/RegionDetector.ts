@@ -161,27 +161,27 @@ export function dilateMask(
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
-      let d = dist[i];
-      if (x > 0) d = Math.min(d, dist[i - 1] + 1);
-      if (y > 0) d = Math.min(d, dist[i - w] + 1);
-      if (x > 0 && y > 0) d = Math.min(d, dist[i - w - 1] + D2);
-      if (x < w - 1 && y > 0) d = Math.min(d, dist[i - w + 1] + D2);
+      let d = dist[i]!;
+      if (x > 0) d = Math.min(d, dist[i - 1]! + 1);
+      if (y > 0) d = Math.min(d, dist[i - w]! + 1);
+      if (x > 0 && y > 0) d = Math.min(d, dist[i - w - 1]! + D2);
+      if (x < w - 1 && y > 0) d = Math.min(d, dist[i - w + 1]! + D2);
       dist[i] = d;
     }
   }
   for (let y = h - 1; y >= 0; y--) {
     for (let x = w - 1; x >= 0; x--) {
       const i = y * w + x;
-      let d = dist[i];
-      if (x < w - 1) d = Math.min(d, dist[i + 1] + 1);
-      if (y < h - 1) d = Math.min(d, dist[i + w] + 1);
-      if (x < w - 1 && y < h - 1) d = Math.min(d, dist[i + w + 1] + D2);
-      if (x > 0 && y < h - 1) d = Math.min(d, dist[i + w - 1] + D2);
+      let d = dist[i]!;
+      if (x < w - 1) d = Math.min(d, dist[i + 1]! + 1);
+      if (y < h - 1) d = Math.min(d, dist[i + w]! + 1);
+      if (x < w - 1 && y < h - 1) d = Math.min(d, dist[i + w + 1]! + D2);
+      if (x > 0 && y < h - 1) d = Math.min(d, dist[i + w - 1]! + D2);
       dist[i] = d;
     }
   }
   const out = new Uint8Array(w * h);
-  for (let i = 0; i < out.length; i++) out[i] = dist[i] <= r && clip[i] ? 1 : 0;
+  for (let i = 0; i < out.length; i++) out[i] = dist[i]! <= r && clip[i] ? 1 : 0;
   return out;
 }
 

@@ -68,7 +68,7 @@ export function Studio() {
   const [history, setHistory] = useState({ canUndo: false, canRedo: false });
   const [cuts, setCuts] = useState(0);
   const [outlines, setOutlines] = useState(0);
-  const [paperProperties, setPaperProperties] = useState<PaperProperties>({
+  const [_paperProperties, setPaperProperties] = useState<PaperProperties>({
     colorPreset: 'coral-red',
     texturePreset: 'rice-paper',
   });
