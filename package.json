@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
+    "deploy": "npm run build && wrangler deploy",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
@@ -33,6 +34,7 @@
     "prettier": "^3.3.3",
     "typescript": "^5.6.3",
     "vite": "^6.0.0",
-    "vitest": "^3.0.0"
+    "vitest": "^3.0.0",
+    "wrangler": "^4.101.0"
   }
 }
