@@ -268,6 +268,46 @@ export class EditorModel {
     return true;
   }
 
+  /**
+   * Lasso scissors (current tool model): the user draws a freeform path with the scissors (or drops a
+   * stamp) and that area is cut **immediately**. Runs the just-drawn stroke through the detector to
+   * recover the enclosed contour(s) — reusing edge-sealing and wedge-clipping — then commits each as
+   * its own cut batch. No pending sketch is kept (the stroke isn't retained). Returns whether anything
+   * was cut. Headless (no detector): the closed polyline is committed directly.
+   */
+  lassoCut(rawPoints: Stroke): boolean {
+    const stroke = cleanStroke(rawPoints);
+    if (stroke.length < 2) return false;
+    const regions = this.detector ? this.detector.detect([stroke], this.fold) : [stroke];
+    const newBatches: Batch[] = [];
+    for (const region of regions) {
+      const path = this.validated(region);
+      if (path) newBatches.push([{ kind: 'add', poly: path }]);
+    }
+    if (newBatches.length === 0) return false;
+    this.push({
+      ...this.state,
+      batches: [...this.batches, ...newBatches],
+      consumed: [...this.consumed, ...newBatches.map(() => [] as Stroke[])],
+    });
+    this.afterMutation();
+    return true;
+  }
+
+  /** Eraser (current tool model): tapping inside a committed cut removes it (un-cuts that area).
+   *  Returns whether a cut was removed. */
+  removeCutAt(at: Point): boolean {
+    const idx = this.cutBatchIndexAt(at);
+    if (idx < 0) return false;
+    this.push({
+      strokes: [...this.strokes, ...(this.consumed[idx] ?? [])],
+      batches: this.batches.filter((_, i) => i !== idx),
+      consumed: this.consumed.filter((_, i) => i !== idx),
+    });
+    this.afterMutation();
+    return true;
+  }
+
   /** Index of the committed batch whose cut polygon contains `p`, or −1. Used by the scissors toggle
    *  to revert a cut the user taps. */
   private cutBatchIndexAt(p: Point): number {

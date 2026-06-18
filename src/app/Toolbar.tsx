@@ -21,7 +21,6 @@ import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { EngineTool } from '../engine/api';
 import { Button, Tooltip } from './Button';
-import pencilIcon from '../assets/icons/tool-pencil.svg';
 import eraserIcon from '../assets/icons/tool-eraser.svg';
 import stampIcon from '../assets/icons/tool-stamp.svg';
 import scissorsIcon from '../assets/icons/tool-scissors.svg';
@@ -42,13 +41,11 @@ export interface ToolbarProps {
   readonly activeTool: EngineTool;
   readonly canUndo: boolean;
   readonly canRedo: boolean;
-  readonly pencilWidth: number;
   readonly stampSize: number;
   readonly scissorsMargin: number;
   readonly onUndo: () => void;
   readonly onRedo: () => void;
   readonly onTool: (tool: EngineTool) => void;
-  readonly onPencilWidth: (v: number) => void;
   readonly onStampSize: (v: number) => void;
   readonly onScissorsMargin: (v: number) => void;
 }
@@ -56,7 +53,6 @@ export interface ToolbarProps {
 // ── tool art: tight-bbox frame + source SVG overflowing it via negative insets (Figma 35:84) ──
 type Art = { src: string; w: number; h: number; inset: [number, number, number, number] }; // inset %: T R B L
 const ART: Record<string, Art> = {
-  pencil:   { src: pencilIcon,   w: 36,  h: 136, inset: [-5.1, -39.17, -13.31, -39.17] },
   eraser:   { src: eraserIcon,   w: 65,  h: 104, inset: [-7, 0, -14, 0] },
   stamp:    { src: stampIcon,    w: 87.6, h: 127, inset: [-7.95, -16.1, -14.25, -16.1] },
   scissors: { src: scissorsIcon, w: 88,  h: 144, inset: [-2.66, -10.69, -9.33, -10.69] },
@@ -67,12 +63,10 @@ type SubmenuParam = { tag: string; min: number; max: number; step: number };
 type Entry = { key: string; tool?: EngineTool; label: string; param?: SubmenuParam };
 
 const ENTRIES: Entry[] = [
-  { key: 'pencil',   tool: 'freehand', label: 'pencil'
-    /* param: { tag: 'width', min: 1, max: 8, step: 0.5 } — restore when submenu is ready */ },
-  { key: 'eraser',   tool: 'erase',    label: 'eraser' },
-  { key: 'stamp',    tool: 'circle',   label: 'stamp',   param: { tag: 'size', min: 0.03, max: 0.25, step: 0.005 } },
   { key: 'scissors', tool: 'scissors', label: 'scissors'
     /* param: { tag: 'fit', min: -0.03, max: 0.03, step: 0.002 } — restore when submenu is ready */ },
+  { key: 'stamp',    tool: 'circle',   label: 'stamp',   param: { tag: 'size', min: 0.03, max: 0.25, step: 0.005 } },
+  { key: 'eraser',   tool: 'erase',    label: 'eraser' },
 ];
 
 // ── shared styles ────────────────────────────────────────────────────────────
@@ -285,13 +279,11 @@ export function Toolbar(props: ToolbarProps) {
   const [hovered, setHovered] = useState<string | null>(null);
 
   const paramValue = (e: Entry): number => {
-    if (e.tool === 'freehand') return props.pencilWidth;
     if (e.tool === 'circle') return props.stampSize;
     if (e.tool === 'scissors') return props.scissorsMargin;
     return 0;
   };
   const paramOnChange = (e: Entry): ((v: number) => void) => {
-    if (e.tool === 'freehand') return props.onPencilWidth;
     if (e.tool === 'circle') return props.onStampSize;
     if (e.tool === 'scissors') return props.onScissorsMargin;
     return () => {};

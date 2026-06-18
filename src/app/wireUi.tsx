@@ -25,6 +25,13 @@ import { PaperStockConfigurator } from './PaperStockConfigurator';
 import { PaperCuttingEngine } from '../engine/EditorEngine';
 import { symmetricalTriangle } from '../core/foldConfig';
 import type { DesignState, EngineTool, PaperStockProps } from '../engine/api';
+import {
+  buildShareUrl,
+  decodeDesign,
+  decodeLegacyDesign,
+  SHARE_PARAM,
+  LEGACY_PARAM,
+} from './shareCodec';
 import type { Point } from '../core/geometry';
 import type { ColorPreset, PaperProperties } from './types';
 import { COLOR_PRESET_HEX } from './types';
@@ -39,32 +46,37 @@ const PRESET_BY_HEX = new Map<string, ColorPreset>(
 
 type Screen = 'editor' | 'preview';
 
-/** Build a share link encoding the full design state (`?design=<base64 JSON>`). */
-function shareUrlFor(state: DesignState): string {
-  const { origin, pathname } = window.location;
-  const encoded = encodeURIComponent(btoa(JSON.stringify(state)));
-  return `${origin}${pathname}?design=${encoded}`;
-}
-
-/** Read a `?design=` (or legacy `?stock=`) param from the URL, or `null` if absent/invalid. */
-function designFromUrl(): DesignState | PaperStockProps | null {
-  try {
-    const params = new URLSearchParams(window.location.search);
-    const design = params.get('design');
-    if (design) return JSON.parse(atob(decodeURIComponent(design))) as DesignState;
-    const stock = params.get('stock');
-    if (stock) return JSON.parse(atob(decodeURIComponent(stock))) as PaperStockProps;
-    return null;
-  } catch {
-    return null;
+/** Read a design from the URL: the compact `?d=` param, a legacy `?design=` link, or a legacy
+ *  `?stock=` (stock only). Async because the compact codec decompresses asynchronously. */
+async function designFromUrl(): Promise<DesignState | PaperStockProps | null> {
+  const params = new URLSearchParams(window.location.search);
+  const compact = params.get(SHARE_PARAM);
+  if (compact) {
+    const decoded = await decodeDesign(compact);
+    if (decoded) return decoded;
   }
+  const design = params.get(LEGACY_PARAM);
+  if (design) {
+    const decoded = decodeLegacyDesign(design);
+    if (decoded) return decoded;
+  }
+  const stock = params.get('stock');
+  if (stock) {
+    try {
+      return JSON.parse(atob(decodeURIComponent(stock))) as PaperStockProps;
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 export function Studio() {
   const engine = useMemo(() => new PaperCuttingEngine(), []);
   const [screen, setScreen] = useState<Screen>('editor');
   const [shareOpen, setShareOpen] = useState(false);
-  const [tool, setTool] = useState<EngineTool>('freehand');
+  const [shareUrl, setShareUrl] = useState('');
+  const [tool, setTool] = useState<EngineTool>('scissors');
   const [history, setHistory] = useState({ canUndo: false, canRedo: false });
   const [cuts, setCuts] = useState(0);
   const [outlines, setOutlines] = useState(0);
@@ -79,9 +91,8 @@ export function Studio() {
   const [printPreviewUrl, setPrintPreviewUrl] = useState<string | null>(null);
   const [printCuts, setPrintCuts] = useState<readonly (readonly Point[])[]>([]);
   const importInputRef = useRef<HTMLInputElement>(null);
-  // Tool-parameter state, surfaced by the Selected-tool submenu sliders (pencil width, stamp size,
-  // scissors cut-fit). Defaults mirror what the engine is seeded with on mount.
-  const [pencilWidth, setPencilWidth] = useState(1.6);
+  // Tool-parameter state, surfaced by the Selected-tool submenu sliders (stamp size, scissors
+  // cut-fit). Defaults mirror what the engine is seeded with on mount.
   const [stampSize, setStampSize] = useState(0.12);
   const [scissorsMargin, setScissorsMargin] = useState(0);
 
@@ -91,29 +102,23 @@ export function Studio() {
       engine.on('pathschange', ({ count }) => setCuts(count)),
       engine.on('outlineschange', ({ count }) => setOutlines(count)),
     ];
-    // Seed the engine with the initial tool-param values (eraser width has no submenu yet).
+    // Seed the engine with the initial tool-param values.
     engine.setStampSize(stampSize);
-    engine.setPencilWidth(pencilWidth);
-    engine.setEraserWidth(0.025);
     engine.setScissorsMargin(scissorsMargin);
-    // Restore a shared design from the URL (?design= full state, or legacy ?stock= stock only).
-    const fromUrl = designFromUrl();
-    if (fromUrl && 'version' in fromUrl) {
-      // Full DesignState from ?design=
-      engine.loadDesignState(fromUrl);
-      handleApplyPaperStock(fromUrl.stock);
-    } else if (fromUrl) {
-      // Legacy ?stock= — only restores paper stock
-      handleApplyPaperStock(fromUrl as PaperStockProps);
-    }
+    // Restore a shared design from the URL (?d= compact, legacy ?design= full state, or legacy
+    // ?stock= stock only). Async because the compact codec decompresses asynchronously.
+    void designFromUrl().then((fromUrl) => {
+      if (fromUrl && 'version' in fromUrl) {
+        engine.loadDesignState(fromUrl);
+        handleApplyPaperStock(fromUrl.stock);
+      } else if (fromUrl) {
+        handleApplyPaperStock(fromUrl as PaperStockProps);
+      }
+    });
     return () => unsubs.forEach((u) => u());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine]);
 
-  const handlePencilWidth = (v: number) => {
-    setPencilWidth(v);
-    engine.setPencilWidth(v);
-  };
   const handleStampSize = (v: number) => {
     setStampSize(v);
     engine.setStampSize(v);
@@ -122,6 +127,19 @@ export function Studio() {
     setScissorsMargin(v);
     engine.setScissorsMargin(v);
   };
+
+  // Rebuild the (async, compressed) share link whenever the Share popup opens.
+  useEffect(() => {
+    if (!shareOpen) return;
+    let live = true;
+    setShareUrl('');
+    void buildShareUrl(engine.getDesignState()).then((url) => {
+      if (live) setShareUrl(url);
+    });
+    return () => {
+      live = false;
+    };
+  }, [shareOpen, engine]);
 
   // Shift+P opens the paper-stock configurator (temporary — no Paper-Texture submenu designed yet).
   useEffect(() => {
@@ -161,13 +179,12 @@ export function Studio() {
     reader.onload = (ev) => {
       try {
         const parsed = JSON.parse(ev.target?.result as string) as DesignState & {
-          toolParams?: { pencilWidth?: number; stampSize?: number; scissorsMargin?: number };
+          toolParams?: { stampSize?: number; scissorsMargin?: number };
         };
         if ('version' in parsed) {
           engine.loadDesignState(parsed);
           handleApplyPaperStock(parsed.stock ?? {});
           if (parsed.toolParams) {
-            if (parsed.toolParams.pencilWidth !== undefined) handlePencilWidth(parsed.toolParams.pencilWidth);
             if (parsed.toolParams.stampSize !== undefined) handleStampSize(parsed.toolParams.stampSize);
             if (parsed.toolParams.scissorsMargin !== undefined) handleScissorsMargin(parsed.toolParams.scissorsMargin);
           }
@@ -207,7 +224,7 @@ export function Studio() {
     const state = engine.getDesignState();
     const config = {
       ...state,
-      toolParams: { pencilWidth, stampSize, scissorsMargin },
+      toolParams: { stampSize, scissorsMargin },
     };
     const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -270,13 +287,11 @@ export function Studio() {
             activeTool={tool}
             canUndo={history.canUndo}
             canRedo={history.canRedo}
-            pencilWidth={pencilWidth}
             stampSize={stampSize}
             scissorsMargin={scissorsMargin}
             onUndo={() => engine.undo()}
             onRedo={() => engine.redo()}
             onTool={chooseTool}
-            onPencilWidth={handlePencilWidth}
             onStampSize={handleStampSize}
             onScissorsMargin={handleScissorsMargin}
           />
@@ -300,7 +315,7 @@ export function Studio() {
       />
       <SharePopup
         open={shareOpen}
-        url={shareUrlFor(engine.getDesignState())}
+        url={shareUrl}
         onClose={() => setShareOpen(false)}
       />
       <input
