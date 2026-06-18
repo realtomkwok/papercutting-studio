@@ -1,0 +1,39 @@
+<svg preserveAspectRatio="none" width="100%" height="100%" overflow="visible" style="display: block;" viewBox="0 0 64.2001 161.03" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Pencil" filter="url(#filter0_dd_0_284)">
+<path id="Border" d="M14.1 79.8072V142.93H50.1V79.8072L33.0709 10.8602C32.8205 9.84659 31.3796 9.8466 31.1292 10.8602L14.1 79.8072Z" fill="var(--fill-0, #F5F2EF)" style="fill:#F5F2EF;fill:color(display-p3 0.9608 0.9490 0.9373);fill-opacity:1;"/>
+<path id="Vector 8" d="M37.7249 29.8832H26.4749L31.1286 10.8929C31.3776 9.87696 32.8222 9.87696 33.0712 10.8929L37.7249 29.8832Z" fill="var(--fill-0, #7A706A)" stroke="var(--stroke-0, #2E2926)" style="fill:#7A706A;fill:color(display-p3 0.4784 0.4392 0.4157);fill-opacity:1;stroke:#2E2926;stroke:color(display-p3 0.1804 0.1608 0.1490);stroke-opacity:1;"/>
+<g id="Mask group">
+<mask id="mask0_0_284" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="14" y="10" width="37" height="133">
+<path id="Vector 9" d="M14.1 79.8072V142.93H50.1V79.8072L33.0709 10.8602C32.8205 9.84659 31.3796 9.8466 31.1292 10.8602L14.1 79.8072Z" fill="var(--fill-0, white)" style="fill:white;fill-opacity:1;"/>
+</mask>
+<g mask="url(#mask0_0_284)">
+<g id="Group 1">
+<path id="Vector 5" d="M24.2247 80.381L24.2249 142.929H39.9748L39.9746 80.381L32.0997 72.3472L24.2247 80.381Z" fill="var(--fill-0, #F5F2EF)" stroke="var(--stroke-0, #2E2926)" style="fill:#F5F2EF;fill:color(display-p3 0.9608 0.9490 0.9373);fill-opacity:1;stroke:#2E2926;stroke:color(display-p3 0.1804 0.1608 0.1490);stroke-opacity:1;"/>
+<path id="Vector 9_2" d="M8.475 80.381L8.47514 142.929H24.225L24.2249 80.381L16.3499 72.3472L8.475 80.381Z" fill="var(--fill-0, #EAE4DC)" stroke="var(--stroke-0, #2E2926)" style="fill:#EAE4DC;fill:color(display-p3 0.9176 0.8941 0.8627);fill-opacity:1;stroke:#2E2926;stroke:color(display-p3 0.1804 0.1608 0.1490);stroke-opacity:1;"/>
+<path id="Vector 10" d="M39.975 80.381L39.9751 142.929H55.725L55.7249 80.381L47.8499 72.3472L39.975 80.381Z" fill="var(--fill-0, #EAE4DC)" stroke="var(--stroke-0, #2E2926)" style="fill:#EAE4DC;fill:color(display-p3 0.9176 0.8941 0.8627);fill-opacity:1;stroke:#2E2926;stroke:color(display-p3 0.1804 0.1608 0.1490);stroke-opacity:1;"/>
+</g>
+</g>
+</g>
+<path id="Border_2" d="M14.1 79.8072V142.93H50.1V79.8072L33.0709 10.8602C32.8205 9.84659 31.3796 9.8466 31.1292 10.8602L14.1 79.8072Z" stroke="var(--stroke-0, #2E2926)" style="stroke:#2E2926;stroke:color(display-p3 0.1804 0.1608 0.1490);stroke-opacity:1;"/>
+</g>
+<defs>
+<filter id="filter0_dd_0_284" x="-4.76837e-07" y="0" width="64.2001" height="161.03" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feMorphology radius="4" operator="dilate" in="SourceAlpha" result="effect1_dropShadow_0_284"/>
+<feOffset dy="4"/>
+<feGaussianBlur stdDeviation="4.8"/>
+<feComposite in2="hardAlpha" operator="out"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0.180392 0 0 0 0 0.160784 0 0 0 0 0.14902 0 0 0 0.1 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_0_284"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feMorphology radius="2" operator="dilate" in="SourceAlpha" result="effect2_dropShadow_0_284"/>
+<feOffset dy="10"/>
+<feGaussianBlur stdDeviation="2.1"/>
+<feComposite in2="hardAlpha" operator="out"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0.180392 0 0 0 0 0.160784 0 0 0 0 0.14902 0 0 0 0.22 0"/>
+<feBlend mode="normal" in2="effect1_dropShadow_0_284" result="effect2_dropShadow_0_284"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect2_dropShadow_0_284" result="shape"/>
+</filter>
+</defs>
+</svg>

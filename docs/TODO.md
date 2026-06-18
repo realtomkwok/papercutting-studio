@@ -2,23 +2,6 @@
 
 Items deferred from milestone work, to revisit before the milestone is considered polished.
 
-## M2 — editor (pending design / pencil / eraser / scissors)
-
-- [ ] **Stencil fidelity (freehand capture).** The pending-design outline sometimes doesn't close the
-  path, and is sometimes over-simplified so the committed shape no longer resembles what was
-  stencilled. Revisit `WedgeEditor.onUp` (`simplify(2.5)` + `flatten(3)`) and the close-the-lasso
-  logic so the captured polygon faithfully follows the drawn stroke and always closes.
-
-- [ ] **Scissors cuts the clicked region, not the whole pending design.** Currently `EditorModel.cut(at)`
-  commits the *entire* pending design when the click lands anywhere inside it. It should instead cut
-  only the closed sub-region (connected component of the composed pending design) under the cursor,
-  leaving the rest of the pending design uncommitted. Needs splitting the pending ops by which
-  component they contribute to — see `EditorModel.cut` / `CutCompositor.design`.
-
-- [ ] **Eraser only carves an existing pending design — it must not create pending area.** The eraser
-  subtracts from the pending design, so an eraser stroke over empty paper (or over already-committed
-  cuts) should be a **no-op**, never adding a pending `subtract` op that lingers. Guard
-  `EditorModel.erase` so a subtract is dropped when it removes nothing from the current pending region.
 
 ## M5 — paper-shaders bake
 
@@ -36,3 +19,63 @@ Items deferred from milestone work, to revisit before the milestone is considere
 - [ ] **Normal map from the bump canvas (deferred per spec).** v1 uses a `bumpMap` only. For sharper
   crease relief under raking light, derive a normal map (Sobel on the combined bump canvas) — see
   worked-example Stage 4.
+
+# M6.5 — Polish
+
+- [x] **Remove the visible border from the 2D paper wedge / hide creases.** Removed the dashed
+  crease lines (apex → each corner) and the FOLDED EDGE labels from `WedgeEditor.drawStatic`; they
+  did not represent actual crease positions and cluttered the paper texture. The solid open-edge line
+  is kept. Full border removal (M6.5 original) can revisit `openEdge` too when texture alignment is
+  confirmed.
+
+## Preview & Share screen (wired in M6 — `src/app/Preview*`, `SharePopup`, `wireUi.tsx`)
+
+The Preview & Share screen (Figma 50:401) is wired: the editor's Share button switches the engine to
+the 3D unfold view (`setMode('unfold3d')` + `playUnfold`), with the instructions card, the
+Print/Save/Share bottom bar, and a share popup. The three actions are currently minimal stubs:
+
+- [x] **Print → print-preview dialog (M7).** `PrintDialog` is wired via `handlePrint` in `wireUi.tsx`;
+  shows the to-scale fold template + fold-sequence thumbnails + expected-result preview. Invokes the
+  system print function on the print-only layout.
+
+- [x] **Save → full design JSON (reusable).** `handleSave` downloads the full `DesignState` (cuts +
+  strokes + fold id + stock) plus `toolParams`. The **Import Design** button in `TopBar` now opens a
+  file picker that reads the JSON back and calls `engine.loadDesignState` + restores tool params.
+
+- [x] **Share URL → restore the full design from the link.** `shareUrlFor` encodes the full
+  `DesignState` as `?design=<base64 JSON>`; `designFromUrl` decodes it on load and calls
+  `engine.loadDesignState` to restore cuts + strokes + stock. Legacy `?stock=` still supported.
+
+## Editor polish (wired in session)
+
+- [x] **Import Design button reads a saved JSON file.** `wireUi.tsx` — hidden `<input type="file">`
+  triggered by `TopBar.onImport`; reads full `DesignState` + optional `toolParams` and restores them
+  via `engine.loadDesignState` + `handleApplyPaperStock`.
+
+- [x] **3D view background is transparent (matches editor dotted-grid).** `EditorEngine`: renderer
+  uses `alpha: true` + `setClearColor(0,0)`; `scene.background` removed. The preview screen now
+  shows the same parchment dotted grid as the editor behind the unfolded paper.
+
+- [x] **Ink strokes hidden while scissors tool is active.** `WedgeEditor.refresh()` — skip ink
+  rendering in scissors mode; the cyan region highlights already communicate "cut here" cleanly.
+
+- [x] **Scissors cuts one region per click (progressive merge).** `EditorModel.cut()` — `.slice(0,1)`
+  so clicking inside two overlapping regions cuts only the topmost one. Subsequent clicks cut the
+  next; `CutCompositor` merges all committed batches into the growing hole.
+
+- [x] **Crease lines + FOLDED EDGE labels removed from 2D editor.** `WedgeEditor.drawStatic()` —
+  removed the dashed apex-to-corner lines and both FOLDED EDGE labels; they misrepresented the actual
+  fold geometry. Open-edge solid line kept.
+
+## Design system & UI polish
+
+- [x] **CSS design tokens.** `src/index.css` — full token set added to `:root`: two font families
+  (`--font\/serif`, `--font\/mono`), 15-style typography scale (`--typography\/<name>\/size` +
+  `\/letter-spacing`), three elevation box-shadows (`--elevation\/1–3`), and an SDS compat alias.
+  All UI components (`Button`, `Toolbar`, `TopBar`, `PreviewTopBar`, `InstructionsCard`,
+  `PreviewPanel`) now reference these tokens rather than hardcoded values.
+
+- [x] **Editor ↔ Preview fade transition.** `wireUi.tsx` — both screens stay mounted; the top bar
+  uses full-coverage `position:absolute` wrappers (no canvas underneath) and the main-area chrome
+  uses zero-height wrappers so they don't occupy any hit-testable area. `opacity` + `visibility`
+  transition at 250 ms; `visibility:hidden` gates the entire inactive subtree's interactivity.

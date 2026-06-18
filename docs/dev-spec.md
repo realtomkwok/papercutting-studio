@@ -9,8 +9,8 @@ A web app that mirrors the real-life Chinese paper-cutting workflow: **fold → 
 ## 1. User flow
 
 1. **Fold (intro animation, optional for v1):** 3D paper folds itself: square → half (horizontal fold) → quarter (vertical fold) → eighth (diagonal fold). Ends as a 45° right triangle.
-2. **Draw:** The folded triangle is presented flat in a 2D editor. User draws closed cut paths inside the wedge.
-3. **Cut:** Cut paths are validated (closed, inside wedge, snapped to fold edges) and previewed as removed material.
+2. **Draw (sketch):** The folded triangle is presented flat in a 2D editor. With the **pencil** the user sketches freehand *ink lines* (open polylines) on the wedge — a draft, like drawing on real folded paper — and the **eraser** rubs that ink out. Nothing is cut yet. (See §4 for the full tool model.)
+3. **Cut (scissors):** The **scissors** read the sketch and detect the *enclosed areas* the lines seal off (against other lines and/or the paper edges), highlighting each. Tapping an area cuts it out (the bounding line is consumed); tapping an existing cut reverts it. Each cut is validated (inside wedge, snapped to fold edges) and previewed as removed material.
 4. **Unfold:** Switch to the 3D view. The paper unfolds hinge by hinge (diagonal → vertical → horizontal), revealing the 8-fold symmetric pattern with holes.
 
 A live "ghost preview" of the unfolded 2D result may be shown beside the editor during the Draw stage (cheap to compute, big UX win).
@@ -76,9 +76,10 @@ Cut path points within ε (suggest ε = 0.5% of paper size) of a fold line must 
 
 ### 2.4 Validity rules (enforce in editor)
 
-- Paths must be closed and non-self-intersecting.
-- Paths must stay within the wedge (clip or reject).
-- The union of cuts must not disconnect the paper (v1: warn only; full connectivity check is a stretch goal — flood-fill test on the rasterised result is the cheap implementation).
+- The validity rules apply to the **cut regions** the scissors produce (closed polygons), not to the raw pencil sketch — pencil strokes are open ink lines and intentionally need not be closed (§4).
+- Cut regions must be closed and non-self-intersecting (they are, by construction — traced from the detected face).
+- Cut regions must stay within the wedge (clip or reject).
+- The union of cuts must not disconnect the paper — handled by the compositor's keep-largest rule (§4); a cut that would drop a piece simply drops it, as real paper does.
 
 ---
 
@@ -90,10 +91,14 @@ src/
     geometry.ts        // reflection matrices, snapping, wedge clipping (no DOM deps — unit-test this)
     unfold.ts          // doubling algorithm over path data; pure functions
     foldConfig.ts      // fold-line definitions; the only place fold order/angles live
+    ink.ts             // pure pencil-sketch model: clean a stroke, erase ink (no DOM — unit-test this)
   editor/              // Paper.js layer
-    WedgeEditor.ts     // drawing tools, validation, edge snapping
+    WedgeEditor.ts     // sketch/scissors/eraser tools, ink rendering (clipped to paper), edge snapping
+    EditorModel.ts     // headless state: ink strokes, detected regions, cut batches, undo/redo
+    CutCompositor.ts   // Paper.js booleans: union cut batches, keep-largest paper piece
     UnfoldPreview.ts   // hidden/side canvas: renders full 8-wedge pattern
   bridge/
+    RegionDetector.ts  // raster: pencil sketch → enclosed cut-out areas (flood/face-label, dilate, trace)
     AlphaMapBaker.ts   // unfolded pattern → 2D canvas → THREE.CanvasTexture (alphaMap)
     PaperTextureBaker.ts // paper-shaders output → snapshot canvas → THREE.CanvasTexture (map + crease bump/tint)
     paperStock.ts      // pure: stock resolution, shader uniform mapping, crease-ridge profile (no DOM — unit-test this)
@@ -113,12 +118,33 @@ Dependencies: `paper`, `three`, `@paper-design/shaders-react` (or `@paper-design
 
 ## 4. Editor (Paper.js)
 
-- **Canvas A (visible):** the wedge editor. Shows the triangle outline, fold-edge indicators (labelled "folded edge" vs "open edge", as in the reference book diagrams), and the user's cut paths. Tools for v1: freehand closed path (simplify on mouse-up via `path.simplify()`), and a small library of stamp shapes (crescent 月牙纹, triangle 三角纹, circle 圆点纹, sawtooth 锯齿纹 — the classic unit patterns).
+The editor mirrors real folded-paper cutting as a **sketch → cut** two-step, not a lasso. The headless state (ink strokes, detected regions, committed cut batches, undo/redo, debounced preview) lives in `editor/EditorModel.ts`; `editor/WedgeEditor.ts` is the thin Paper.js view that turns pointer events into plain point arrays and renders. Both run UI-free behind the engine API.
+
+### 4.1 Tools
+
+- **Pencil** — sketches freehand *ink lines* (open polylines; `simplify` + `flatten` on mouse-up). These are a draft, never cut directly. Ink is **clipped to the wedge**, so anything drawn off the paper is invisible. A width slider sets the line weight, with a brush-size cursor preview.
+- **Eraser** — rubs the drawn path over the sketch, trimming/splitting the ink strokes it touches (never the committed cuts). Width slider + cursor preview.
+- **Stamps** — the classic unit patterns (crescent 月牙纹, triangle 三角纹, circle 圆点纹, sawtooth 锯齿纹). A stamp drops a **closed ink loop**, so the scissors detect its interior exactly like a hand-drawn loop.
+- **Scissors** — detect and cut the **enclosed areas** the sketch encloses (§4.2). Every uncut area is highlighted (cyan); committed cuts get a dimmed wash hinting they can be reverted. Tapping an area cuts it; tapping a cut **reverts** it (a toggle). "Cut all" cuts every uncut area at once. A "fit" slider tunes how tightly the cut hugs the pencil line.
+
+### 4.2 Scissors region detection (`bridge/RegionDetector.ts`)
+
+A raster bridge concern (`core/` stays pure). For the current sketch:
+
+1. Rasterise the wedge interior plus the ink strokes as thin **walls**; a stroke endpoint near a paper edge is first extended onto it, so a line drawn *to* an edge seals against it (the edge can then close an area).
+2. **Label every face** the ink carves (connected interior cells). The single largest face touching the **open edge** is the un-cuttable paper *body*; every other face is a cut candidate — including faces sealed by fold edges *and* faces a line carves off against the open edge. (Simple loops still work: the big outside face is the body, the loop interior the cut.)
+3. **Dilate** each candidate back out to the pencil-line centerline (plus the user's fit margin), which hugs the line and **merges** faces split only by a single stroke, so a pencilled shape cuts as one whole. Clipped to the wedge.
+4. Trace each merged face to a contour, simplify, and return as plain unit-space polygons.
+
+When a cut is made, the bounding sketch lines it fully encloses are **consumed** (removed from the sketch and stored with the cut); reverting the cut restores them. Committed cut batches are unioned and reduced to the **largest connected paper piece** (`editor/CutCompositor.ts`) — the keep-largest rule of §2.4.
+
+### 4.3 Unfold preview
+
 - **Canvas B (hidden or side preview):** the unfold preview. On every edit (debounced ~100 ms):
-  1. Export wedge paths to plain data; snap edges (§2.3).
+  1. Take the committed removed-region contours (the sketch never reaches here — only actual cuts do); they are already snapped to the fold edges (§2.3).
   2. Run `unfold()` → 8-way path set.
   3. Render: **white square on black background, cuts filled black.** This exact convention is what the alphaMap expects (white = opaque paper, black = hole).
-- Boolean ops note: prefer rendering cuts as filled shapes over the white square rather than calling `subtract()` on every edit — Paper.js boolean ops are robust but slow with many curves. Reserve true `subtract()` for export/validation.
+- Boolean ops note: prefer rendering cuts as filled shapes over the white square rather than calling `subtract()` on every edit — Paper.js boolean ops are robust but slow with many curves. Reserve true `subtract()` for the keep-largest compose and export/validation.
 
 ---
 
@@ -248,9 +274,9 @@ Each milestone lists its **deliverable** (what exists at the end), **tech** (lib
 - **Test:** golden-snapshot test — known wedge cut → assert the unfolded result matches a stored reference (point-set or rasterised PNG diff). Key acceptance: a cut touching a fold edge yields one merged hole across the seam — assert the union's contour count is as expected with no zero-area slivers. Visual diff against the Design 18 photo.
 
 ### M2 — Editor (Paper.js)
-- **Deliverable:** interactive wedge editor — freehand closed-path tool (`path.simplify()`), stamp tools (crescent / circle / sawtooth / triangle unit patterns), **contour-cut** tool (cuts the open edge, needed for the cone-fold and plum-blossom templates), validation (closed, in-wedge, edge-snap), debounced live unfold preview, undo/redo. Emits `pathschange` / `validation` via the engine API.
-- **Tech:** Paper.js (tools, hit-testing, `simplify`, boolean ops); the engine event bus. No React in this layer.
-- **Test:** engine-level tests driving the **headless** API (the engine must run UI-free, per §3.2) — a path crossing the wedge boundary is clipped/rejected; an edge-touching point snaps within ε; the preview updates after the debounce. Optional Playwright for real pointer interaction. Manual exploratory drawing.
+- **Deliverable:** interactive wedge editor on the **sketch → cut** model (§4): **pencil** (freehand ink lines, clipped to the paper, width slider + cursor preview), **eraser** (rubs ink out, width slider + preview), **stamp** tools (crescent / circle / sawtooth / triangle — dropped as closed ink loops), and **scissors** that detect the enclosed areas, highlight them, cut on tap and revert on tap-again, with a cut-fit slider and "Cut all". Region detection in `bridge/RegionDetector.ts`; headless state (ink strokes, regions, cut batches, undo/redo, debounced preview) in `editor/EditorModel.ts`; keep-largest compose in `editor/CutCompositor.ts`. Emits `pathschange` / `outlineschange` / `validation` via the engine API.
+- **Tech:** Paper.js (tools, hit-testing, `simplify`/`flatten`, clipping groups, boolean ops); an offscreen 2D canvas for the raster region detection; the engine event bus. No React in this layer.
+- **Test:** engine-level tests driving the **headless** API (the engine must run UI-free, per §3.2), with a stub region detector — a region crossing the wedge boundary is clipped/rejected; an edge-touching point snaps within ε; cutting commits a batch and dismisses the bounding line; tapping a cut reverts it and restores the line; the preview updates after the debounce. Pure helpers (`core/ink.ts` erase, `RegionDetector` grid ops: label/dilate/trace/simplify/edge-extend) unit-tested directly. Detection-on-canvas verified in-browser. Manual exploratory drawing.
 
 ### M2.5 — Templates *(parallel with M3)*
 - **Deliverable:** `src/templates/*.svg` + `foldConfig` for the four templates, plus a loader that imports a template as **editable** paths. `lotus-cross` first; the asymmetrical-triangle and two cone folds added once their wedge geometry / wrap angles are measured.

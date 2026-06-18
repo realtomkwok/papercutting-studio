@@ -1,0 +1,14 @@
+<svg preserveAspectRatio="none" width="100%" height="100%" overflow="visible" style="display: block;" viewBox="0 0 65 168" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <g id="Eraser">
+    <!-- Back body (x=0, y=64, w=65, h=104) -->
+    <rect x="0.5" y="64.5" width="64" height="103" fill="#D4C8C0" stroke="#2E2926" stroke-width="1"/>
+    <!-- Front body (x=15, y=64, w=50, h=104, rounded TL/BL r=4) -->
+    <path d="M 19.5 64.5 L 64.5 64.5 L 64.5 167.5 L 19.5 167.5 A 4 4 0 0 1 15.5 163.5 L 15.5 68.5 A 4 4 0 0 1 19.5 64.5 Z" fill="#D4C8C0" stroke="#2E2926" stroke-width="1"/>
+    <!-- Top cap (x=2, y=0, w=61, h=64, rounded TL/TR r=12) -->
+    <path d="M 14.5 0.5 L 50.5 0.5 A 12 12 0 0 1 62.5 12.5 L 62.5 63.5 L 2.5 63.5 L 2.5 12.5 A 12 12 0 0 1 14.5 0.5 Z" fill="#F5F2EF" stroke="#2E2926" stroke-width="1"/>
+    <!-- Stripe (x=23, y=64, w=24, h=104, linen fill, top/bottom border only) -->
+    <rect x="23" y="65" width="24" height="102" fill="#EAE2DC"/>
+    <line x1="23" y1="64.5" x2="47" y2="64.5" stroke="#2E2926" stroke-width="1"/>
+    <line x1="23" y1="167.5" x2="47" y2="167.5" stroke="#2E2926" stroke-width="1"/>
+  </g>
+</svg>

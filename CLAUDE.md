@@ -19,9 +19,9 @@ Full spec: `docs/dev-spec.md`. Worked example for the first milestone-set target
 
 ```
 src/
-  core/         pure TS — geometry, unfold, foldConfig. No paper/three imports.
-  editor/       Paper.js layer — WedgeEditor, UnfoldPreview
-  bridge/       Paper.js canvas → THREE.CanvasTexture (alphaMap, colour map, bump)
+  core/         pure TS — geometry, unfold, foldConfig, ink (sketch/erase). No paper/three imports.
+  editor/       Paper.js layer — WedgeEditor (view), EditorModel (headless state), CutCompositor, UnfoldPreview
+  bridge/       raster ↔ vector — RegionDetector (sketch → cut areas); Paper.js canvas → THREE.CanvasTexture (alphaMap, colour map, bump)
   scene/        Three.js layer — PaperMesh, FoldRig, Studio
   engine/       api.ts (the contract) + EditorEngine class
   app/          React shell, CanvasHost, wireUi.tsx (the only file that knows both sides)
@@ -44,6 +44,12 @@ Three rules that the architecture enforces and that future changes must respect:
 - `foldConfig` is the single source of truth for both the 2D copy generator and the 3D hinge rig: ordered list of fold lines (`{angle, moves}`), copy count, wedge boundary angles.
 - Only `symmetrical-triangle` (D₄, 8 copies, 45° wedge — Design 18 / `lotus-cross`) has its geometry fully pinned. The other three templates (`eight-petal`, `plum-blossom`, `saw-medallion`) need their exact crease angles measured from reference diagrams before their `foldConfig` is trustworthy. **Don't ship those on guessed angles.**
 
+## Editor tool model (sketch → cut — dev-spec §4)
+
+- The pencil draws **open ink lines**, not closed lassos. `EditorModel.strokes` are open polylines; only the **detected cut regions** are validated as closed polygons. Don't reintroduce "the pencil must draw a closed path."
+- The scissors do **raster region detection** in `bridge/RegionDetector.ts` (a bridge concern — `core/` stays pure): label the faces the ink carves, keep the largest open-edge-touching face as the un-cuttable body, dilate every other face to the pencil centerline (merging faces split by one line), trace to contours. A stroke endpoint near a paper edge is extended onto it so a line drawn to an edge seals against it.
+- Cutting **consumes** the sketch lines a cut fully encloses (stored with the batch); the scissors are a **toggle** — tap an area to cut, tap a cut to revert (restoring those lines). The detector is injected into `EditorModel` (real impl in the engine; stub in tests) so the model stays headless.
+
 ## Gotchas (read before coding — full list in dev-spec §10)
 
 - One canvas = one context type. Paper.js (2D) and Three.js (WebGL) can never share a canvas.
@@ -60,12 +66,13 @@ Build order is sequential except M2.5 ‖ M3. Each milestone's acceptance criter
 
 - **M0** Scaffold: Vite + TS + React, `CanvasHost`, empty `EditorEngine` with three canvases, `core/geometry.ts` (R(θ), snapping, copy generator), `src/engine/api.ts` stub.
 - **M1** Unfold engine (2D): `core/unfold.ts` — wedge data + foldConfig → unfolded path set + crease segments with mountain/valley parity.
-- **M2** Paper.js editor: freehand + stamps + contour-cut tool, validation, debounced live preview.
+- **M2** Paper.js editor on the **sketch → cut** model (dev-spec §4): **pencil** sketches freehand ink lines (clipped to the paper, width slider + cursor preview), **eraser** rubs ink out, **stamps** drop closed ink loops, **scissors** detect the enclosed areas (`bridge/RegionDetector.ts` — raster flood/face-label → dilate-to-centerline → trace), highlight them, cut on tap and revert on tap-again, with a cut-fit slider. Headless state in `editor/EditorModel.ts`; keep-largest compose in `editor/CutCompositor.ts`. The pencil draws *open* lines — only the detected regions are validated as closed polygons.
 - **M2.5** Templates (parallel with M3): `lotus-cross` first; others gated on confirmed fold angles.
 - **M3** Bridge: `AlphaMapBaker` — bake canvas → `THREE.CanvasTexture` as alphaMap, live-updating.
 - **M4** Fold rig: nested hinges from `foldConfig`, single `progress ∈ [0,1]` scrubber, eased ~10%-overlapping segments.
 - **M5** Paper Shaders bake *(done)*: `PaperTextureBaker` (offscreen `ShaderMount` → snapshot → `map` + luminance/crease `bumpMap`) + crease bump/tint composite (worked-example Stage 4); pure `bridge/paperStock.ts` (uniform mapping, ridge profile). Extensions: the baked colour map is also painted into the 2D editor wedge + side preview, and `app/PaperStockConfigurator.tsx` is a live configurator (full controls + JSON export/import) that re-bakes via `setPaperStock`.
-- **M6** Polish: fold-intro, lighting, residual-crease relax, PNG/SVG export, full FSM, Figma Make chrome wired through `wireUi.tsx`.
+- **M6** Wired the UI and functionalities through `wireUi.tsx`, including the **Preview & Share** screen (Figma 50:401): the editor's Share button switches the single mounted engine into the 3D unfold view, with an instructions card and a Print/Save/Share bottom bar (`src/app/Preview*`, `SharePopup`). The three actions are minimal stubs — refinements in `docs/TODO.md`.
+- **M6.5** Polish: fold-intro, lighting, residual-crease relax, PNG/SVG export, full FSM
 - **M7** Print export: printable instruction sheet — to-scale fold template (at physical paper size), fold-sequence diagram from `foldConfig`, expected-result preview. Browser `window.print()` + `@media print` stylesheet; `jsPDF` fallback if scale control requires it. `exportPattern` extended to `'svg' | 'png' | 'pdf'`.
 
 ## Build, test, run

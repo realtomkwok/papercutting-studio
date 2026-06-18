@@ -8,6 +8,7 @@ import paper from 'paper';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type {
+  DesignState,
   EditorEngine,
   EngineEvent,
   EngineEventPayload,
@@ -24,6 +25,7 @@ import { WedgeEditor } from '../editor/WedgeEditor';
 import { UnfoldPreview, PREVIEW_COLORS } from '../editor/UnfoldPreview';
 import type { UnfoldResult } from '../core/unfold';
 import { CutCompositor } from '../editor/CutCompositor';
+import { RegionDetector } from '../bridge/RegionDetector';
 import { AlphaMapBaker } from '../bridge/AlphaMapBaker';
 import { PaperTextureBaker } from '../bridge/PaperTextureBaker';
 import { FoldRig } from '../scene/FoldRig';
@@ -56,6 +58,7 @@ export class PaperCuttingEngine implements EditorEngine {
   private preview: UnfoldPreview | null = null;
   private visiblePreview: UnfoldPreview | null = null;
   private compositor: CutCompositor | null = null;
+  private detector: RegionDetector | null = null; // scissors: flood-fill enclosed-area detection
   private baker: AlphaMapBaker | null = null; // M3 bridge: bake canvas → THREE alphaMap mesh
   private paperBaker: PaperTextureBaker | null = null; // M5: paper-shaders colour map + crease bump
   private foldRig: FoldRig | null = null; // M4: nested-hinge rig driven by the unfold scrubber
@@ -70,6 +73,7 @@ export class PaperCuttingEngine implements EditorEngine {
   private rafId: number | null = null;
   private unfoldProgress = 1;
   private playStart: number | null = null; // timestamp while playUnfold animates; null when idle
+  private stockProps: PaperStockProps = {}; // mirrors what was last passed to setPaperStock
 
   constructor() {
     this.model = new EditorModel({
@@ -97,7 +101,7 @@ export class PaperCuttingEngine implements EditorEngine {
       width: '100%',
       height: '100%',
       display: 'block',
-      background: '#faf7f2', // light paper backdrop, independent of the OS colour scheme
+      background: 'transparent', // let the editor chrome's dotted-grid backdrop show through
     });
 
     // Hidden bake canvas: full-square unfolded pattern at texture resolution.
@@ -157,11 +161,11 @@ export class PaperCuttingEngine implements EditorEngine {
     });
     this.resizeObs.observe(el);
 
-    this.renderer = new THREE.WebGLRenderer({ canvas: this.viewCanvas, antialias: true });
+    this.renderer = new THREE.WebGLRenderer({ canvas: this.viewCanvas, antialias: true, alpha: true });
+    this.renderer.setClearColor(0x000000, 0);
     const { clientWidth, clientHeight } = el;
     this.renderer.setSize(clientWidth || 1, clientHeight || 1, false);
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0xf5f1ea);
     this.camera = new THREE.PerspectiveCamera(
       45,
       (clientWidth || 1) / (clientHeight || 1),
@@ -184,8 +188,13 @@ export class PaperCuttingEngine implements EditorEngine {
     // into the headless model so both the editor and the previews work off the merged region.
     this.compositor = new CutCompositor(this.paperScope!, () => this.wedgeVerts());
     this.model.setCompositor({
-      design: (ops) => this.compositor!.design(ops),
       committed: (batches) => this.compositor!.committed(batches),
+    });
+    // Scissors region detector (raster flood fill): finds the enclosed areas the pencil sketch seals
+    // off, so the editor can highlight them and the model can cut them out.
+    this.detector = new RegionDetector();
+    this.model.setDetector({
+      detect: (strokes, fold) => this.detector!.detect(strokes, fold),
     });
 
     // The 2D editor + side preview paint their paper with the M5 paper-shaders bake (a lazy closure —
@@ -291,10 +300,12 @@ export class PaperCuttingEngine implements EditorEngine {
     this.foldRig?.dispose();
     this.paperBaker?.dispose();
     this.baker?.dispose();
+    this.detector?.dispose();
     this.editor = null;
     this.preview = null;
     this.visiblePreview = null;
     this.compositor = null;
+    this.detector = null;
     this.controls = null;
     this.foldRig = null;
     this.paperBaker = null;
@@ -345,8 +356,8 @@ export class PaperCuttingEngine implements EditorEngine {
     this.editor?.setTool(tool);
   }
 
-  drawOutline(points: readonly Point[]): void {
-    this.model.drawOutline(points);
+  drawStroke(points: readonly Point[]): void {
+    this.model.drawStroke(points);
   }
 
   cut(at?: Point): void {
@@ -367,6 +378,19 @@ export class PaperCuttingEngine implements EditorEngine {
 
   setStampSize(size: number): void {
     this.editor?.setStampSize(size);
+  }
+
+  setPencilWidth(px: number): void {
+    this.editor?.setPencilWidth(px);
+  }
+
+  setEraserWidth(size: number): void {
+    this.editor?.setEraseRadius(size);
+  }
+
+  setScissorsMargin(margin: number): void {
+    this.detector?.setCutMargin(margin);
+    this.model.refreshRegions(); // re-detect with the new fit; editor repaints the highlights
   }
 
   setViewRotation(deg: number): void {
@@ -413,9 +437,36 @@ export class PaperCuttingEngine implements EditorEngine {
   }
 
   setPaperStock(props: PaperStockProps): void {
+    this.stockProps = props;
     // Re-bake the paper-shaders colour map + crease composite for the new stock; the baker repaints
     // the 3D view via its onBaked callback when the (async) render completes.
     void this.paperBaker?.bake(props);
+  }
+
+  getDesignState(): DesignState {
+    return {
+      version: 1,
+      foldId: this.fold.id,
+      cuts: this.model.composedContours.map((c) => c.map((p) => ({ x: p.x, y: p.y }))),
+      strokes: this.model.strokes.map((s) => s.map((p) => ({ x: p.x, y: p.y }))),
+      stock: this.stockProps,
+    };
+  }
+
+  loadDesignState(state: DesignState): void {
+    this.model.clear();
+    if (state.foldId !== this.fold.id) this.loadFoldConfig(state.foldId);
+    // Replay each cut as an individual committed path (same path as addCutPath).
+    for (const cut of state.cuts) this.model.commit(cut);
+    for (const stroke of state.strokes) this.model.drawStroke(stroke);
+    if (state.stock) {
+      this.stockProps = state.stock;
+      void this.paperBaker?.bake(state.stock);
+    }
+  }
+
+  getPreviewImageUrl(): string | null {
+    return this.previewCanvas?.toDataURL('image/png') ?? null;
   }
 
   undo(): void {

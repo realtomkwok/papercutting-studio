@@ -2,14 +2,10 @@
  * CutCompositor (M2) — turns drawn design ops into the actual *removed* region of the wedge, the way
  * real folded paper behaves (dev-spec §2.4, §8 acceptance "single connected piece").
  *
- * Two jobs, mirroring the editor's two layers:
- *  - {@link design} composes one *pending design* — the dotted shape the pencil (`add`) and eraser
- *    (`subtract`) build up in order — into its literal contours. No wedge clip, no keep-largest: it's
- *    just what the user has drawn, holes and all.
- *  - {@link committed} composes the *committed cut batches*. Each batch is composed independently
- *    (so its internal eraser notches survive as holes), the batch regions are **unioned** (a cut only
- *    ever removes more paper — a later batch can't restore an earlier one), then the surviving paper
- *    is reduced to its **largest connected piece**; the rest falls away as a real cut would drop it.
+ * {@link committed} composes the *committed cut batches* (each the region one scissors action cut
+ * out). Each batch is composed independently, the batch regions are **unioned** (a cut only ever
+ * removes more paper — a later batch can't restore an earlier one), then the surviving paper is
+ * reduced to its **largest connected piece**; the rest falls away as a real cut would drop it.
  *
  * Returns removed regions as plain contour polygons (outer boundaries + island boundaries), which the
  * unfold engine reflects and the renderers fill with the even–odd rule.
@@ -34,19 +30,6 @@ export class CutCompositor {
     /** Wedge outline (unit space) used to clip cuts and run the keep-largest rule. */
     private readonly wedge: () => readonly Point[],
   ) {}
-
-  /** Compose the pending design's add/subtract `ops` into its literal contours (the dotted shape). */
-  design(ops: Ops): Point[][] {
-    if (ops.length === 0) return [];
-    this.scope.activate();
-    const scratch = new paper.Layer();
-    try {
-      const region = this.regionFromOps(ops);
-      return region ? this.contours(region) : [];
-    } finally {
-      scratch.remove();
-    }
-  }
 
   /**
    * Compose the committed cut `batches` against the wedge. Each batch becomes a region (its own

@@ -10,9 +10,22 @@ import type { Point } from '../core/geometry';
 
 export type EngineMode = 'draw' | 'preview' | 'unfold3d';
 
-/** The drawing/cutting tools. `freehand` is the pencil (adds to the pending design); the stamp kinds
- *  drop a saved unit pattern; `contour` traces along the open edge; `scissors` cuts the pending design
- *  into an actual cut; `erase` subtracts from the pending design (never the committed cuts). */
+/** Serialisable snapshot of the full design — cuts, pending ink, fold config, paper stock.
+ *  Used for JSON export (Save) and URL encoding (Share). Re-load via `loadDesignState`. */
+export interface DesignState {
+  readonly version: 1;
+  /** `FoldConfig.id` — the fold template. */
+  readonly foldId: string;
+  /** Committed cut contours in unit-square coords (the composed removed-material regions). */
+  readonly cuts: readonly (readonly Point[])[];
+  /** Pending pencil ink strokes in unit-square coords. */
+  readonly strokes: readonly (readonly Point[])[];
+  readonly stock: PaperStockProps;
+}
+
+/** The drawing/cutting tools. `freehand` is the pencil (sketches ink lines); the stamp kinds drop a
+ *  saved unit pattern as a closed ink loop; `scissors` cuts out the enclosed areas the sketch seals
+ *  off; `erase` rubs out pencil ink (never the committed cuts). */
 export type EngineTool =
   | 'freehand'
   | 'crescent'
@@ -21,7 +34,10 @@ export type EngineTool =
   | 'triangle'
   | 'contour'
   | 'scissors'
-  | 'erase';
+  | 'erase'
+  // View-only "hand" tool: drag the canvas to rotate the paper (geometry unaffected). Not a drawing
+  // tool — handled in the editor's pointer handlers, produces no strokes.
+  | 'rotate';
 
 export type ExportFormat = 'svg' | 'png';
 
@@ -60,7 +76,7 @@ export type EngineEventPayload = {
   modechange: { mode: EngineMode };
   /** Number of committed cut batches (the removed material that reaches the preview). */
   pathschange: { count: number };
-  /** Number of ops in the pending design (pencil adds + eraser subtracts; absent from the preview). */
+  /** Number of pencil ink strokes in the current sketch (absent from the preview until cut). */
   outlineschange: { count: number };
   validation: { ok: boolean; messages: readonly string[] };
   unfoldprogress: { t: number };
@@ -78,14 +94,14 @@ export interface EditorEngine {
   // commands (UI → engine)
   setMode(mode: EngineMode): void;
   setTool(tool: EngineTool): void;
-  /** Pencil: add a closed outline to the pending design (unit-square coords): drawn, validated/snapped,
-   *  and shown dotted in the editor, but NOT yet removed — it doesn't reach the preview until cut. */
-  drawOutline(points: readonly Point[]): void;
-  /** Scissors: cut the pending design out, committing it as one cut batch. With a point, only cuts
-   *  when it lies inside the design; without one, always commits a non-empty design. The cut becomes
-   *  a hole and the keep-largest rule applies across all committed batches. */
+  /** Pencil: add a freehand ink stroke (open polyline, unit-square coords) to the sketch. Shown as a
+   *  pencil line in the editor, but NOT removed — it doesn't reach the preview until cut. */
+  drawStroke(points: readonly Point[]): void;
+  /** Scissors: cut out the enclosed areas the sketch seals off. With a point, cuts only the area
+   *  under it; without one, cuts every detected area ("Cut all"). Each becomes a hole and the
+   *  keep-largest rule applies across all committed batches. */
   cut(at?: Point): void;
-  /** Eraser: subtract a drawn region from the pending design (carves the dotted shape). It never
+  /** Eraser: rub the drawn polyline over the sketch, trimming the ink strokes it touches. It never
    *  touches the committed cuts. */
   erase(points: readonly Point[]): void;
   /** Directly commit a closed cut, skipping the pending step — for templates (M2.5) and headless
@@ -95,6 +111,13 @@ export interface EditorEngine {
   clearPaths(): void;
   /** Stamp size (≈ pattern radius) in unit-square units, for the stamp tools' ghost + placement. */
   setStampSize(size: number): void;
+  /** Pencil ink width in view pixels (also the pencil cursor-preview size). */
+  setPencilWidth(px: number): void;
+  /** Eraser radius in unit-square units (the rub size and the eraser cursor-preview size). */
+  setEraserWidth(size: number): void;
+  /** Scissors cut-fit margin (unit-square units): how tightly the cut hugs the pencil line. 0 hugs
+   *  the centerline; negative insets the cut; positive grows it past the line. Re-detects regions. */
+  setScissorsMargin(margin: number): void;
   /** Rotate the editor view (the paper) by `deg` — a display convenience; geometry is unchanged. */
   setViewRotation(deg: number): void;
   loadTemplate(id: string): void;
@@ -105,6 +128,12 @@ export interface EditorEngine {
   undo(): void;
   redo(): void;
   exportPattern(format: ExportFormat): Promise<Blob>;
+  /** Snapshot the current design (cuts + strokes + stock). For Save and Share. */
+  getDesignState(): DesignState;
+  /** Restore a previously saved design state: replays cuts + strokes + applies stock. */
+  loadDesignState(state: DesignState): void;
+  /** PNG data URL of the live 2D unfold preview canvas (for the print instructions sheet). */
+  getPreviewImageUrl(): string | null;
 
   // events (engine → UI)
   on<E extends EngineEvent>(event: E, cb: (payload: EngineEventPayload[E]) => void): Unsubscribe;

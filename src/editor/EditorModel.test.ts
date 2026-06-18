@@ -89,112 +89,158 @@ describe('EditorModel — commit & events', () => {
   });
 });
 
-describe('EditorModel — pending design (pencil + eraser) → scissors', () => {
-  // A second outline elsewhere in the wedge (well clear of INSIDE).
-  const OTHER: Point[] = [
+describe('EditorModel — pencil sketch + eraser → scissors', () => {
+  // Two enclosed cut-out areas a stub detector reports whenever the sketch is non-empty.
+  const REGION_A: Point[] = [
+    { x: 0.2, y: 0.04 },
+    { x: 0.35, y: 0.04 },
+    { x: 0.3, y: 0.12 },
+  ];
+  const REGION_B: Point[] = [
     { x: 0.4, y: 0.02 },
     { x: 0.48, y: 0.02 },
     { x: 0.44, y: 0.08 },
   ];
-  const insideInside: Point = { x: 0.283, y: 0.066 }; // ~centroid of INSIDE
+  const insideA: Point = { x: 0.283, y: 0.066 }; // ~centroid of REGION_A
+  const A_LINE: Point[] = [
+    { x: 0.18, y: 0.02 },
+    { x: 0.37, y: 0.05 },
+  ];
+  /** Detector that returns the two fixed regions once any ink exists. */
+  const twoRegions = (model: EditorModel) =>
+    model.setDetector({ detect: (strokes) => (strokes.length ? [REGION_A, REGION_B] : []) });
 
-  it('pencil adds to the pending design, which is NOT cut or previewed yet', () => {
+  it('pencil adds an ink stroke that is NOT cut or previewed yet', () => {
     const { model, events, unfolds } = makeModel();
-    const ok = model.drawOutline(INSIDE);
+    const ok = model.drawStroke(A_LINE);
 
     expect(ok).toBe(true);
-    expect(model.pending).toHaveLength(1);
-    expect(model.pending[0]!.kind).toBe('add');
+    expect(model.strokes).toHaveLength(1);
     expect(model.cuts).toHaveLength(0);
     expect(events.outlineschange?.at(-1)).toEqual({ count: 1 });
     expect(events.pathschange?.at(-1)).toEqual({ count: 0 }); // no committed cuts
 
     vi.advanceTimersByTime(100);
-    expect(unfolds.at(-1)!.copies).toHaveLength(0); // the pending design never reaches the preview
+    expect(unfolds.at(-1)!.copies).toHaveLength(0); // the sketch never reaches the preview
   });
 
-  it('scissors with no point commits the pending design as one batch', () => {
+  it('rejects a degenerate (single-point) stroke', () => {
+    const { model } = makeModel();
+    expect(model.drawStroke([{ x: 0.2, y: 0.05 }])).toBe(false);
+    expect(model.strokes).toHaveLength(0);
+  });
+
+  it('scissors at a point cuts only the enclosed area under it', () => {
     const { model, unfolds } = makeModel();
-    model.drawOutline(INSIDE);
-    model.drawOutline(OTHER);
-    expect(model.cut()).toBe(true);
-    expect(model.pending).toHaveLength(0);
-    expect(model.batches).toHaveLength(1); // both pencil strokes → one committed batch
+    twoRegions(model);
+    model.drawStroke(A_LINE); // ink present → detector reports both regions
+    expect(model.regions).toHaveLength(2);
+
+    expect(model.cut(insideA)).toBe(true);
+    expect(model.batches).toHaveLength(1); // only REGION_A committed
 
     vi.advanceTimersByTime(100);
-    expect(unfolds.at(-1)!.copies).toHaveLength(16); // 2 design pieces × 8 symmetry copies
+    expect(unfolds.at(-1)!.copies).toHaveLength(8); // 1 cut × 8 symmetry copies
   });
 
-  it('scissors at a point inside the design commits the whole design', () => {
+  it('cutting dismisses the bounding sketch line; reverting restores it', () => {
     const { model } = makeModel();
-    model.drawOutline(INSIDE);
-    model.drawOutline(OTHER);
-    expect(model.cut(insideInside)).toBe(true);
+    model.setDetector({ detect: (s) => (s.length ? [REGION_A] : []) });
+    // A small loop fully inside REGION_A — the line that "bounds" the cut.
+    const innerLoop = [
+      { x: 0.27, y: 0.05 },
+      { x: 0.31, y: 0.05 },
+      { x: 0.29, y: 0.08 },
+      { x: 0.27, y: 0.05 },
+    ];
+    model.drawStroke(innerLoop);
+    expect(model.strokes).toHaveLength(1);
+
+    model.cut(insideA);
     expect(model.batches).toHaveLength(1);
-    expect(model.pending).toHaveLength(0); // the entire design is committed, not just one piece
+    expect(model.strokes).toHaveLength(0); // bounding line dismissed with the cut
+
+    model.cut(insideA); // tap again → revert
+    expect(model.batches).toHaveLength(0);
+    expect(model.strokes).toHaveLength(1); // line restored
   });
 
-  it('scissors outside the pending design cuts nothing', () => {
+  it('a dangling sketch line not enclosed by the cut survives', () => {
     const { model } = makeModel();
-    model.drawOutline(INSIDE);
+    model.setDetector({ detect: (s) => (s.length ? [REGION_A] : []) });
+    model.drawStroke(A_LINE); // pokes outside REGION_A
+    model.cut(insideA);
+    expect(model.strokes).toHaveLength(1); // kept
+  });
+
+  it('tapping a cut area again reverts the cut (scissors toggle)', () => {
+    const { model } = makeModel();
+    twoRegions(model);
+    model.drawStroke(A_LINE);
+    expect(model.cut(insideA)).toBe(true); // cut REGION_A
+    expect(model.batches).toHaveLength(1);
+
+    expect(model.cut(insideA)).toBe(true); // tap again → revert
+    expect(model.batches).toHaveLength(0);
+  });
+
+  it('a cut area drops out of the highlighted regions and is not re-cut by "Cut all"', () => {
+    const { model } = makeModel();
+    twoRegions(model);
+    model.drawStroke(A_LINE);
+    model.cut(insideA); // cut REGION_A
+    expect(model.regions).toHaveLength(1); // only REGION_B still highlighted
+
+    model.cut(); // Cut all → cuts only the remaining uncut area (B)
+    expect(model.batches).toHaveLength(2);
+  });
+
+  it('scissors with no point cuts every detected area ("Cut all")', () => {
+    const { model, unfolds } = makeModel();
+    twoRegions(model);
+    model.drawStroke(A_LINE);
+    expect(model.cut()).toBe(true);
+    expect(model.batches).toHaveLength(2); // both regions → two committed batches
+
+    vi.advanceTimersByTime(100);
+    expect(unfolds.at(-1)!.copies).toHaveLength(16); // 2 cuts × 8 copies
+  });
+
+  it('scissors outside every detected area cuts nothing', () => {
+    const { model } = makeModel();
+    twoRegions(model);
+    model.drawStroke(A_LINE);
     expect(model.cut({ x: 0.49, y: 0.001 })).toBe(false);
     expect(model.batches).toHaveLength(0);
-    expect(model.pending).toHaveLength(1);
   });
 
-  it('eraser subtracts from the pending design and never touches committed cuts', () => {
+  it('scissors with no enclosed areas cuts nothing', () => {
     const { model } = makeModel();
-    // Stub compositor that records what each layer receives.
-    let designKinds: string[] = [];
-    let committedBatchSizes: number[] = [];
-    model.setCompositor({
-      design: (ops) => {
-        designKinds = ops.map((o) => o.kind);
-        return ops.filter((o) => o.kind === 'add').map((o) => o.poly.map((p) => ({ x: p.x, y: p.y })));
-      },
-      committed: (batches) => {
-        committedBatchSizes = batches.map((b) => b.length);
-        return batches.flatMap((b) =>
-          b.filter((o) => o.kind === 'add').map((o) => o.poly.map((p) => ({ x: p.x, y: p.y }))),
-        );
-      },
-    });
+    twoRegions(model); // detector returns [] while the sketch is empty
+    expect(model.regions).toHaveLength(0);
+    expect(model.cut()).toBe(false);
+    expect(model.batches).toHaveLength(0);
+  });
 
-    model.commit(INSIDE); // one committed batch
+  it('eraser trims ink strokes and never touches committed cuts', () => {
+    const { model } = makeModel();
+    twoRegions(model);
+    model.commit(REGION_A); // one committed cut
     expect(model.batches).toHaveLength(1);
 
-    // Build a new pending design: pencil add then eraser subtract — both land in `design`, the
-    // committed layer is untouched (still one batch of one op).
-    model.drawOutline(OTHER);
-    expect(model.erase(OTHER)).toBe(true);
-    expect(model.pending.map((o) => o.kind)).toEqual(['add', 'subtract']);
-    expect(designKinds).toEqual(['add', 'subtract']);
-    expect(committedBatchSizes).toEqual([1]); // the eraser never reached the committed layer
-  });
+    // A 4-point ink line; rubbing the eraser over an interior point splits/trims it.
+    model.drawStroke([
+      { x: 0.1, y: 0 },
+      { x: 0.2, y: 0 },
+      { x: 0.3, y: 0 },
+      { x: 0.4, y: 0 },
+    ]);
+    expect(model.strokes).toHaveLength(1);
 
-  it('a committed cut is never restored by a later design eraser (committed batches are unioned)', () => {
-    const { model, unfolds } = makeModel();
-    let committedBatchCount = 0;
-    model.setCompositor({
-      design: () => [],
-      committed: (batches) => {
-        committedBatchCount = batches.length;
-        return batches.flatMap((b) =>
-          b.filter((o) => o.kind === 'add').map((o) => o.poly.map((p) => ({ x: p.x, y: p.y }))),
-        );
-      },
-    });
-
-    model.commit(INSIDE); // committed cut
-    // New design that erases over the committed area, then commit it.
-    model.drawOutline(OTHER);
-    model.erase(INSIDE);
-    model.cut();
-    expect(committedBatchCount).toBe(2); // two independent batches, unioned (no cross-batch restore)
-
-    vi.advanceTimersByTime(100);
-    // The stub keeps both batches' adds (INSIDE + OTHER) → 2 cuts × 8 copies; the eraser is internal.
-    expect(unfolds.at(-1)!.copies).toHaveLength(16);
+    expect(model.erase([{ x: 0.2, y: 0 }])).toBe(true);
+    // The committed cut is untouched; only the ink changed.
+    expect(model.batches).toHaveLength(1);
+    expect(model.strokes.flat().some((p) => p.x === 0.2)).toBe(false);
   });
 });
 
@@ -208,7 +254,6 @@ describe('EditorModel — compositor injection', () => {
       { x: 0.3, y: 0.2 },
     ];
     model.setCompositor({
-      design: (ops) => (ops.length ? [merged] : []),
       committed: (batches) => (batches.length ? [merged] : []),
     });
 
