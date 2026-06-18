@@ -64,7 +64,7 @@ export class PaperCuttingEngine implements EditorEngine {
   private foldRig: FoldRig | null = null; // M4: nested-hinge rig driven by the unfold scrubber
   private controls: OrbitControls | null = null; // M4: orbit the 3D paper in the unfold view
   private fold: FoldConfig = symmetricalTriangle;
-  private currentTool: EngineTool = 'freehand';
+  private currentTool: EngineTool = 'scissors';
   private unsubPaths: Unsubscribe | null = null;
   private lastUnfold: UnfoldResult | null = null; // cached so a re-bake can repaint the 2D previews
 
@@ -378,14 +378,6 @@ export class PaperCuttingEngine implements EditorEngine {
 
   setStampSize(size: number): void {
     this.editor?.setStampSize(size);
-  }
-
-  setPencilWidth(px: number): void {
-    this.editor?.setPencilWidth(px);
-  }
-
-  setEraserWidth(size: number): void {
-    this.editor?.setEraseRadius(size);
   }
 
   setScissorsMargin(margin: number): void {

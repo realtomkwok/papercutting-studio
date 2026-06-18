@@ -23,11 +23,10 @@ export interface DesignState {
   readonly stock: PaperStockProps;
 }
 
-/** The drawing/cutting tools. `freehand` is the pencil (sketches ink lines); the stamp kinds drop a
- *  saved unit pattern as a closed ink loop; `scissors` cuts out the enclosed areas the sketch seals
- *  off; `erase` rubs out pencil ink (never the committed cuts). */
+/** The cutting tools (lasso model). `scissors` is a lasso: draw a freeform path and the enclosed area
+ *  is cut out immediately. The stamp kinds drop a saved unit pattern and cut it out immediately too.
+ *  `erase` removes a committed cut (tap a cut-out to un-cut it). */
 export type EngineTool =
-  | 'freehand'
   | 'crescent'
   | 'circle'
   | 'sawtooth'
@@ -111,11 +110,7 @@ export interface EditorEngine {
   clearPaths(): void;
   /** Stamp size (≈ pattern radius) in unit-square units, for the stamp tools' ghost + placement. */
   setStampSize(size: number): void;
-  /** Pencil ink width in view pixels (also the pencil cursor-preview size). */
-  setPencilWidth(px: number): void;
-  /** Eraser radius in unit-square units (the rub size and the eraser cursor-preview size). */
-  setEraserWidth(size: number): void;
-  /** Scissors cut-fit margin (unit-square units): how tightly the cut hugs the pencil line. 0 hugs
+  /** Scissors cut-fit margin (unit-square units): how tightly the cut hugs the lasso line. 0 hugs
    *  the centerline; negative insets the cut; positive grows it past the line. Re-detects regions. */
   setScissorsMargin(margin: number): void;
   /** Rotate the editor view (the paper) by `deg` — a display convenience; geometry is unchanged. */

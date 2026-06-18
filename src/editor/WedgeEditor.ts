@@ -27,18 +27,16 @@ const STAMP_KINDS: Record<string, StampKind> = {
 };
 
 // Editor matches the final design: the paper is RED (kept material), holes are the page background
-// (so cuts read as hollow). The pencil draws a draft *sketch* in light graphite lines on the red;
-// the scissors highlight the enclosed areas that sketch seals off, in cyan, to say "cut here".
+// (so cuts read as hollow). The scissors draw a live cyan lasso line; on release the enclosed area is
+// cut out. The eraser washes committed cuts in faint cyan to say "tap to remove".
 const PAPER_FILL = new paper.Color('#c8102e');
 const HOLE_FILL = new paper.Color('#faf7f2');
 const CUT_STROKE = new paper.Color(0.55, 0.02, 0.1, 0.8);
-const INK_STROKE = new paper.Color(1, 1, 1, 0.92); // pencil sketch lines (not yet cut)
-const ERASE_STROKE = new paper.Color(0.15, 0.35, 0.85, 0.7); // live eraser-rub feedback
-const REGION_FILL = new paper.Color(0.0, 0.7, 0.85, 0.3); // scissors: an enclosed cut-out area
-const REGION_STROKE = new paper.Color(0.0, 0.55, 0.7, 0.95);
-const CUT_HINT_FILL = new paper.Color(0.0, 0.55, 0.7, 0.12); // scissors: a dimmed "tap to revert" hole
+const LASSO_STROKE = new paper.Color(0.0, 0.55, 0.7, 0.95); // live scissors lasso line
+const CUT_HINT_FILL = new paper.Color(0.0, 0.55, 0.7, 0.12); // eraser: a dimmed "tap to remove" hole
 const CUT_HINT_STROKE = new paper.Color(0.0, 0.45, 0.6, 0.5);
 const GHOST_FILL = new paper.Color(1, 1, 1, 0.35); // stamp ghost preview
+const INK_STROKE = new paper.Color(1, 1, 1, 0.92); // stamp ghost outline
 
 export class WedgeEditor {
   private readonly staticLayer: paper.Layer;
@@ -47,11 +45,10 @@ export class WedgeEditor {
   private readonly ghostLayer: paper.Layer;
   private readonly tool: paper.Tool;
 
-  private current: EngineTool = 'freehand';
+  private current: EngineTool = 'scissors';
   private draft: paper.Path | null = null;
-  /** The draft's clip group (wedge mask + draft line), so ink drawn off the paper is invisible. */
+  /** The lasso draft's clip group (wedge mask + lasso line), so the line off the paper is invisible. */
   private draftGroup: paper.Group | null = null;
-  private draftMode: 'pencil' | 'erase' = 'pencil';
 
   private scale = 1;
   /** Interactive zoom multiplier (scroll-to-zoom), applied on top of the fit-to-canvas scale. */
@@ -69,10 +66,6 @@ export class WedgeEditor {
 
   /** Stamp radius in unit-square units (settable via the size slider). */
   private stampSize = 0.12;
-  /** Pencil ink width in view pixels (settable via the pencil width slider). */
-  private pencilWidth = 1.6;
-  /** Eraser radius in unit-square units (settable via the eraser width slider). */
-  private eraseRadius = 0.025;
 
   constructor(
     private readonly scope: paper.PaperScope,
@@ -123,17 +116,6 @@ export class WedgeEditor {
 
   setStampSize(size: number): void {
     this.stampSize = Math.max(0.01, size);
-  }
-
-  /** Pencil ink width in view pixels. Repaints so existing sketch lines follow the new width. */
-  setPencilWidth(px: number): void {
-    this.pencilWidth = Math.max(0.5, px);
-    this.refresh();
-  }
-
-  /** Eraser radius in unit-square units (drives both the rub and the cursor preview). */
-  setEraseRadius(size: number): void {
-    this.eraseRadius = Math.max(0.005, size);
   }
 
   setViewRotation(deg: number): void {
@@ -273,33 +255,15 @@ export class WedgeEditor {
 
 
   /**
-   * Redraw, from model state, the three editor layers: the committed cuts (holes), the pencil sketch
-   * (ink lines), and — only while the scissors tool is active — the highlighted enclosed areas the
-   * scissors offer to cut. Called on every `pathschange` / `outlineschange` and on tool change.
+   * Redraw, from model state, the editor layers: the committed cuts (holes) and — while the eraser
+   * tool is active — a dimmed "tap to remove" hint over each cut. The scissors lasso draws its live
+   * line directly during the drag, so it needs no persistent overlay here. Called on every
+   * `pathschange` / `outlineschange` and on tool change.
    */
   refresh(): void {
     this.scope.activate();
     this.pathsLayer.removeChildren();
     this.pathsLayer.activate();
-
-    // Pencil sketch — shown only when NOT in scissors mode (scissors shows region highlights instead,
-    // making the raw strokes redundant noise while cutting).
-    if (this.current !== 'scissors') {
-      const inkLines: paper.Path[] = [];
-      for (const stroke of this.model.strokes) {
-        if (stroke.length < 2) continue;
-        const line = new paper.Path({ segments: stroke.map((p) => this.unitToView(p)) });
-        line.strokeColor = INK_STROKE;
-        line.strokeWidth = this.pencilWidth;
-        line.strokeCap = 'round';
-        line.strokeJoin = 'round';
-        inkLines.push(line);
-      }
-      if (inkLines.length > 0) {
-        const inkGroup = new paper.Group([this.wedgeViewPath(), ...inkLines]);
-        inkGroup.clipped = true; // first child masks the ink to the wedge
-      }
-    }
 
     // Committed cuts punch holes in the red paper: fill the merged removed-region with the background
     // colour (even-odd so island-holes render correctly), so they read as hollow like the final piece.
@@ -325,35 +289,18 @@ export class WedgeEditor {
       edge.strokeWidth = 0.75;
     }
 
-    // Scissors overlays (on top of everything):
-    if (this.current === 'scissors') {
-      // Dimmed hint on the committed cuts — a faint cyan wash so the user knows a tap reverts them.
-      if (contours.length > 0) {
-        const hint = new paper.CompoundPath({
-          children: contours.map(
-            (pts) => new paper.Path({ segments: pts.map((p) => this.unitToView(p)), closed: true }),
-          ),
-        });
-        hint.fillRule = 'evenodd';
-        hint.fillColor = CUT_HINT_FILL;
-        hint.strokeColor = CUT_HINT_STROKE;
-        hint.strokeWidth = 1;
-        hint.dashArray = [3, 3];
-      }
-
-      // Bright highlight on the *uncut* enclosed areas (cut ones drop out of model.regions) — what a
-      // tap will cut out.
-      for (const region of this.model.regions) {
-        if (region.length < 3) continue;
-        const area = new paper.Path({
-          segments: region.map((p) => this.unitToView(p)),
-          closed: true,
-        });
-        area.fillColor = REGION_FILL;
-        area.strokeColor = REGION_STROKE;
-        area.strokeWidth = 1;
-        area.dashArray = [4, 3];
-      }
+    // Eraser overlay: a dimmed cyan wash over each committed cut so the user knows a tap removes it.
+    if (this.current === 'erase' && contours.length > 0) {
+      const hint = new paper.CompoundPath({
+        children: contours.map(
+          (pts) => new paper.Path({ segments: pts.map((p) => this.unitToView(p)), closed: true }),
+        ),
+      });
+      hint.fillRule = 'evenodd';
+      hint.fillColor = CUT_HINT_FILL;
+      hint.strokeColor = CUT_HINT_STROKE;
+      hint.strokeWidth = 1;
+      hint.dashArray = [3, 3];
     }
   }
 
@@ -371,28 +318,24 @@ export class WedgeEditor {
       this.rotateStart = { angle: this.pointerAngle(e.point), deg: this.rotationDeg };
       return; // rotation happens on drag; a bare click is a no-op
     }
-    if (tool === 'scissors') {
-      this.model.cut(u); // cut out the enclosed area under the cursor
+    if (tool === 'erase') {
+      this.model.removeCutAt(u); // tap a cut-out to un-cut it
       return;
     }
     if (STAMP_KINDS[tool]) {
       this.clearGhost();
-      // A stamp drops a closed ink loop (first point repeated) — the scissors then detect its
-      // interior as an enclosed cut-out area, exactly like a hand-drawn loop.
+      // A stamp drops its closed outline (first point repeated) and that area is cut immediately.
       const outline = makeStamp(STAMP_KINDS[tool], u, this.stampSize);
-      this.model.drawStroke([...outline, outline[0]!]);
+      this.model.lassoCut([...outline, outline[0]!]);
       return;
     }
-    // pencil and eraser begin a freehand draft stroke (kept open — the pencil sketches lines).
-    this.draftMode = tool === 'erase' ? 'erase' : 'pencil';
+    // Scissors: begin a freeform lasso draft — the enclosed area is cut out on release.
     this.toolLayer.activate();
     this.draft = new paper.Path({ segments: [e.point], closed: false });
-    this.draft.strokeColor = this.draftMode === 'erase' ? ERASE_STROKE : INK_STROKE;
-    // Eraser draws at its full rubbing diameter; pencil at its ink width.
-    this.draft.strokeWidth =
-      this.draftMode === 'erase' ? this.eraseRadius * this.scale * 2 : this.pencilWidth;
+    this.draft.strokeColor = LASSO_STROKE;
+    this.draft.strokeWidth = 1.5;
     this.draft.strokeCap = 'round';
-    // Clip the live draft to the wedge so ink drawn off the paper is invisible while drawing.
+    // Clip the live lasso to the wedge so the line drawn off the paper is invisible while drawing.
     this.draftGroup = new paper.Group([this.wedgeViewPath(), this.draft]);
     this.draftGroup.clipped = true;
   }
@@ -417,21 +360,16 @@ export class WedgeEditor {
     }
     if (!this.draft) return;
     const draft = this.draft;
-    const mode = this.draftMode;
     this.draft = null;
     // Smooth the freehand jitter, then FLATTEN the curve back into line segments before reading
-    // points — `simplify()` alone leaves bézier handles our plain point model can't keep. The path
-    // stays OPEN: the pencil draws a sketch line, not a closed lasso. Flatten samples it faithfully.
+    // points — `simplify()` alone leaves bézier handles our plain point model can't keep. Flatten
+    // samples it faithfully into a dense polyline.
     draft.simplify(2.5); // smooth freehand jitter (dev-spec §4)
     draft.flatten(3); // → dense polyline following the curve, no handles
     const pts = draft.segments.map((s) => this.viewToUnit(s.point));
     this.draftGroup?.remove();
     this.draftGroup = null;
-    if (mode === 'erase') {
-      this.model.erase(pts, this.eraseRadius); // eraser → rub out the ink the pencil drew
-    } else {
-      this.model.drawStroke(pts); // pencil → ink line (scissors find the enclosed areas later)
-    }
+    this.model.lassoCut(pts); // scissors lasso → cut the enclosed area immediately
   }
 
   /** Cursor preview under the pointer: a translucent stamp for the stamp tools, or a brush-size
@@ -452,16 +390,6 @@ export class WedgeEditor {
       ghost.strokeColor = INK_STROKE;
       ghost.strokeWidth = 1;
       ghost.dashArray = [4, 3];
-      return;
-    }
-
-    if (this.current === 'freehand' || this.current === 'erase') {
-      const erasing = this.current === 'erase';
-      const radiusPx = erasing ? this.eraseRadius * this.scale : Math.max(2, this.pencilWidth / 2);
-      const cursor = new paper.Path.Circle(e.point, radiusPx);
-      cursor.fillColor = erasing ? ERASE_STROKE : GHOST_FILL;
-      cursor.strokeColor = erasing ? ERASE_STROKE : INK_STROKE;
-      cursor.strokeWidth = 1;
     }
   }
 

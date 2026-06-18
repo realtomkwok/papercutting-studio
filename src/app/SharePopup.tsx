@@ -89,7 +89,10 @@ export function SharePopup({ open, url, onClose }: SharePopupProps) {
 
   if (!open) return null;
 
+  const ready = url.length > 0;
+
   const copy = async () => {
+    if (!ready) return;
     try {
       await navigator.clipboard.writeText(url);
       setMsg('Link copied to clipboard');
@@ -126,8 +129,8 @@ export function SharePopup({ open, url, onClose }: SharePopupProps) {
         <input
           style={urlBox}
           readOnly
-          value={url}
-          onFocus={(e) => e.currentTarget.select()}
+          value={ready ? url : 'Generating link…'}
+          onFocus={(e) => ready && e.currentTarget.select()}
         />
         <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', alignItems: 'center' }}>
           <span style={status}>{msg}</span>

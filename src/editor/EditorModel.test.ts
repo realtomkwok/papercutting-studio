@@ -309,3 +309,33 @@ describe('EditorModel — history', () => {
     expect(model.paths).toHaveLength(1);
   });
 });
+
+describe('EditorModel — lasso scissors & eraser (current tool model)', () => {
+  const insideA: Point = { x: 0.283, y: 0.066 }; // ~centroid of INSIDE
+
+  it('lassoCut cuts the drawn area immediately, with no pending sketch retained', () => {
+    const { model, events, unfolds } = makeModel();
+    expect(model.lassoCut(INSIDE)).toBe(true);
+    expect(model.cuts).toHaveLength(1); // committed straight away
+    expect(model.strokes).toHaveLength(0); // lasso isn't kept as pending ink
+    expect(events.pathschange?.at(-1)).toEqual({ count: 1 });
+    vi.advanceTimersByTime(100);
+    expect(unfolds.at(-1)!.copies).toHaveLength(8); // reaches the preview
+  });
+
+  it('lassoCut rejects a degenerate (sub-2-point) stroke', () => {
+    const { model } = makeModel();
+    expect(model.lassoCut([{ x: 0.2, y: 0.05 }])).toBe(false);
+    expect(model.cuts).toHaveLength(0);
+  });
+
+  it('eraser removeCutAt un-cuts the committed area under the point; undoable', () => {
+    const { model } = makeModel();
+    model.lassoCut(INSIDE);
+    expect(model.removeCutAt(insideA)).toBe(true);
+    expect(model.cuts).toHaveLength(0);
+    expect(model.removeCutAt(insideA)).toBe(false); // nothing left there
+    model.undo(); // the removal is undoable → cut returns
+    expect(model.cuts).toHaveLength(1);
+  });
+});

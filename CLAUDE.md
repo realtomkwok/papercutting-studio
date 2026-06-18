@@ -44,11 +44,14 @@ Three rules that the architecture enforces and that future changes must respect:
 - `foldConfig` is the single source of truth for both the 2D copy generator and the 3D hinge rig: ordered list of fold lines (`{angle, moves}`), copy count, wedge boundary angles.
 - Only `symmetrical-triangle` (D₄, 8 copies, 45° wedge — Design 18 / `lotus-cross`) has its geometry fully pinned. The other three templates (`eight-petal`, `plum-blossom`, `saw-medallion`) need their exact crease angles measured from reference diagrams before their `foldConfig` is trustworthy. **Don't ship those on guessed angles.**
 
-## Editor tool model (sketch → cut — dev-spec §4)
+## Editor tool model (lasso → cut)
 
-- The pencil draws **open ink lines**, not closed lassos. `EditorModel.strokes` are open polylines; only the **detected cut regions** are validated as closed polygons. Don't reintroduce "the pencil must draw a closed path."
-- The scissors do **raster region detection** in `bridge/RegionDetector.ts` (a bridge concern — `core/` stays pure): label the faces the ink carves, keep the largest open-edge-touching face as the un-cuttable body, dilate every other face to the pencil centerline (merging faces split by one line), trace to contours. A stroke endpoint near a paper edge is extended onto it so a line drawn to an edge seals against it.
-- Cutting **consumes** the sketch lines a cut fully encloses (stored with the batch); the scissors are a **toggle** — tap an area to cut, tap a cut to revert (restoring those lines). The detector is injected into `EditorModel` (real impl in the engine; stub in tests) so the model stays headless.
+The tool model is now **lasso-immediate**: there is no pencil and no pending sketch. (The earlier sketch→cut flow — pencil draws open ink, scissors detect enclosed regions, tap to cut — is gone; see git history if you need it.)
+
+- **Scissors = lasso.** Drag a freeform path; on release, the enclosed area is cut out **immediately** (`EditorModel.lassoCut`). The just-drawn stroke is run through `bridge/RegionDetector.detect` to recover the enclosed contour(s) — reusing edge-sealing (a stroke endpoint near a paper edge extends onto it) and wedge-clipping — then each contour is committed as its own cut batch. The stroke is **not** retained as pending ink.
+- **Stamps** (`crescent`/`circle`/`sawtooth`/`triangle`/`contour`) drop their closed outline and cut it the same way (via `lassoCut`).
+- **Eraser = remove a cut.** Tapping inside a committed cut un-cuts it (`EditorModel.removeCutAt`); undoable. It no longer rubs ink.
+- The detector is still injected into `EditorModel` (real impl in the engine; stub in tests) so the model stays headless. The model **retains** its older `drawStroke`/`erase`/`cut`/`regions` API (used by templates, `loadDesignState`, and unit tests) even though the live editor no longer drives it.
 
 ## Gotchas (read before coding — full list in dev-spec §10)
 
