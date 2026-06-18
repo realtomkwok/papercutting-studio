@@ -19,9 +19,9 @@ const panel: CSSProperties = {
 };
 
 const label: CSSProperties = {
-  fontFamily: "'Shippori Antique B1', serif",
-  fontSize: 14,
-  letterSpacing: '0.04em',
+  fontFamily: 'var(--font\\/serif)',
+  fontSize: 'var(--typography\\/button\\/size)',
+  letterSpacing: 'var(--typography\\/button\\/letter-spacing)',
   textTransform: 'uppercase',
   color: 'var(--color\\/border)',
 };

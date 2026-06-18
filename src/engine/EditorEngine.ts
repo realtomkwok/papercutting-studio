@@ -161,11 +161,11 @@ export class PaperCuttingEngine implements EditorEngine {
     });
     this.resizeObs.observe(el);
 
-    this.renderer = new THREE.WebGLRenderer({ canvas: this.viewCanvas, antialias: true });
+    this.renderer = new THREE.WebGLRenderer({ canvas: this.viewCanvas, antialias: true, alpha: true });
+    this.renderer.setClearColor(0x000000, 0);
     const { clientWidth, clientHeight } = el;
     this.renderer.setSize(clientWidth || 1, clientHeight || 1, false);
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0xf5f1ea);
     this.camera = new THREE.PerspectiveCamera(
       45,
       (clientWidth || 1) / (clientHeight || 1),

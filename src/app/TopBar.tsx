@@ -36,9 +36,9 @@ const title: CSSProperties = {
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap',
   textAlign: 'center',
-  fontFamily: "'Shippori Antique B1', serif",
+  fontFamily: 'var(--font\\/serif)',
   fontSize: 'var(--sds-typography-subheading-size-small)',
-  letterSpacing: '0.04em',
+  letterSpacing: 'var(--typography\\/body-large\\/letter-spacing)',
   textTransform: 'uppercase',
   color: C.foreground,
 };

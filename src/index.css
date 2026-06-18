@@ -74,6 +74,48 @@
 
   /* ── Spacing ── */
   --sds-size-space-1200: 48px;
+
+  /* ── Font families ── */
+  --font\/serif: 'Shippori Antique B1', serif;
+  --font\/mono: 'Geist Mono', monospace;
+
+  /* ── Typography: sizes ── */
+  --typography\/display\/size: 72px;
+  --typography\/h1\/size: 48px;
+  --typography\/h2\/size: 36px;
+  --typography\/h3\/size: 24px;
+  --typography\/h4\/size: 20px;
+  --typography\/body-large\/size: 16px;
+  --typography\/body\/size: 14px;
+  --typography\/code\/size: 14px;
+  --typography\/button\/size: 14px;
+  --typography\/body-small\/size: 12px;
+  --typography\/label\/size: 11px;
+  --typography\/button-small\/size: 10px;
+  --typography\/caption\/size: 10px;
+  --typography\/eyebrow\/size: 9px;
+  --typography\/footnote\/size: 8px;
+
+  /* ── Typography: letter-spacing (Figma ls ÷ 1000 = CSS em) ── */
+  --typography\/display\/letter-spacing: 0.04em;
+  --typography\/h1\/letter-spacing: 0.024em;
+  --typography\/h2\/letter-spacing: 0.02em;
+  --typography\/h3\/letter-spacing: 0.04em;
+  --typography\/h4\/letter-spacing: 0.04em;
+  --typography\/body-large\/letter-spacing: 0.04em;
+  --typography\/button\/letter-spacing: 0.04em;
+  --typography\/button-small\/letter-spacing: 0.04em;
+  --typography\/label\/letter-spacing: 0.04em;
+  --typography\/eyebrow\/letter-spacing: 0.04em;
+  --typography\/caption\/letter-spacing: 0.001em;
+
+  /* ── Elevation: box-shadow ── */
+  --elevation\/1: 0 1px 3px rgba(46,41,38,.06), 0 2px 1.5px rgba(46,41,38,.19);
+  --elevation\/2: 0 -1px 13px rgba(46,41,38,.10), 0 4px 4.2px rgba(46,41,38,.10);
+  --elevation\/3: 0 12px 48px 12px rgba(46,41,38,.16), 0 8px 10px rgba(46,41,38,.28);
+
+  /* ── SDS compat ── */
+  --sds-typography-subheading-size-small: var(--typography\/body-large\/size);
 }
 
 /* Tool hover-tooltip / selected-submenu entrance (Toolbar) */

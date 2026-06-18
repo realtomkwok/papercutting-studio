@@ -35,7 +35,6 @@ const C = {
   input: 'var(--color\\/input)',
 } as const;
 
-const FONT = "'Shippori Antique B1', serif";
 const BAR_H = 92; // visible card band; fits the 80px undo/redo column
 const CONTAINER_H = 190; // clip bounds: band + room above for the hover tag / selected submenu
 
@@ -58,7 +57,7 @@ export interface ToolbarProps {
 type Art = { src: string; w: number; h: number; inset: [number, number, number, number] }; // inset %: T R B L
 const ART: Record<string, Art> = {
   pencil:   { src: pencilIcon,   w: 36,  h: 136, inset: [-5.1, -39.17, -13.31, -39.17] },
-  eraser:   { src: eraserIcon,   w: 65,  h: 104, inset: [-7, 0, 0, 0] },
+  eraser:   { src: eraserIcon,   w: 65,  h: 104, inset: [-7, 0, -14, 0] },
   stamp:    { src: stampIcon,    w: 87.6, h: 127, inset: [-7.95, -16.1, -14.25, -16.1] },
   scissors: { src: scissorsIcon, w: 88,  h: 144, inset: [-2.66, -10.69, -9.33, -10.69] },
 };
@@ -153,7 +152,14 @@ function shadowFor(state: 'active' | 'hover' | 'selected'): string {
 }
 
 function liftFor(state: 'active' | 'hover' | 'selected'): string {
-  return state === 'hover' ? 'translateY(-6px)' : 'translateY(0)';
+  switch (state) {
+    case 'active':
+      return 'translateY(0)';
+    case 'hover':
+      return 'translateY(-12px)';
+    case 'selected':
+      return 'translateY(-6px)';
+  }
 }
 
 const ART_MOTION: CSSProperties = { transition: 'filter 180ms ease, transform 180ms ease', willChange: 'filter, transform' };
@@ -183,17 +189,17 @@ function ToolArt({ art }: { art: Art }) {
 
 // ── parameter submenu (functional slider — Figma 75:680) ─────────────────────
 const tagText: CSSProperties = {
-  fontFamily: FONT,
-  fontSize: 14,
-  letterSpacing: '0.04em',
+  fontFamily: 'var(--font\\/serif)',
+  fontSize: 'var(--typography\\/button\\/size)',
+  letterSpacing: 'var(--typography\\/button\\/letter-spacing)',
   textTransform: 'uppercase',
   color: C.secondaryForeground,
   whiteSpace: 'nowrap',
 };
 const minMaxText: CSSProperties = {
-  fontFamily: FONT,
-  fontSize: 10,
-  letterSpacing: '0.04em',
+  fontFamily: 'var(--font\\/serif)',
+  fontSize: 'var(--typography\\/button-small\\/size)',
+  letterSpacing: 'var(--typography\\/button-small\\/letter-spacing)',
   textTransform: 'uppercase',
   color: C.foreground,
 };

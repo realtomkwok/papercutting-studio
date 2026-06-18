@@ -12,6 +12,7 @@ import type { CSSProperties } from 'react';
 import { Button } from './Button';
 import { PrintLayout, PRINT_SPECS } from './PrintLayout';
 import type { FoldConfig } from '../core/foldConfig';
+import type { Point } from '../core/geometry';
 
 const FONT = "'Shippori Antique B1', serif";
 
@@ -58,6 +59,8 @@ const toolbar: CSSProperties = {
 export interface PrintDialogProps {
   readonly open: boolean;
   readonly fold: FoldConfig;
+  /** Composed cut contours (`DesignState.cuts`) for the to-scale wedge template. */
+  readonly cuts: readonly (readonly Point[])[];
   readonly previewImageUrl: string | null;
   readonly onClose: () => void;
 }
@@ -65,6 +68,7 @@ export interface PrintDialogProps {
 export function PrintDialog({
   open,
   fold,
+  cuts,
   previewImageUrl,
   onClose,
 }: PrintDialogProps) {
@@ -190,6 +194,7 @@ export function PrintDialog({
               <PrintLayout
                 fold={fold}
                 printSpec={spec}
+                cuts={cuts}
                 previewImageUrl={previewImageUrl}
               />
             </div>

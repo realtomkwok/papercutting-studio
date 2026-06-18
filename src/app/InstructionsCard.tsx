@@ -9,8 +9,6 @@
 
 import type { CSSProperties } from 'react';
 
-const FONT = "'Shippori Antique B1', serif";
-
 const card: CSSProperties = {
   position: 'absolute',
   top: 12,
@@ -23,13 +21,13 @@ const card: CSSProperties = {
   padding: 8,
   background: 'var(--color\\/popover)',
   border: '1px solid var(--color\\/border)',
-  boxShadow: '0 2px 0.5px rgba(0,0,0,0.12)',
+  boxShadow: 'var(--elevation\\/1)',
 };
 
 const heading: CSSProperties = {
-  fontFamily: FONT,
-  fontSize: 11,
-  letterSpacing: '0.04em',
+  fontFamily: 'var(--font\\/serif)',
+  fontSize: 'var(--typography\\/label\\/size)',
+  letterSpacing: 'var(--typography\\/label\\/letter-spacing)',
   textTransform: 'uppercase',
   color: 'var(--color\\/popover-foreground)',
   whiteSpace: 'nowrap',
@@ -38,9 +36,9 @@ const heading: CSSProperties = {
 const row: CSSProperties = { display: 'flex', gap: 10, alignItems: 'center' };
 
 const lineText: CSSProperties = {
-  fontFamily: FONT,
-  fontSize: 10,
-  letterSpacing: '0.1px',
+  fontFamily: 'var(--font\\/serif)',
+  fontSize: 'var(--typography\\/caption\\/size)',
+  letterSpacing: 'var(--typography\\/caption\\/letter-spacing)',
   color: 'var(--color\\/popover-foreground)',
   whiteSpace: 'nowrap',
 };

@@ -28,8 +28,6 @@ const C = {
   popoverForeground: 'var(--color\\/popover-foreground)',
 } as const;
 
-const FONT = "'Shippori Antique B1', serif";
-
 export type ButtonType = 'icon' | 'icon-text' | 'option';
 export type ButtonSize = 'm' | 's';
 
@@ -76,7 +74,7 @@ export function Button(props: ButtonProps) {
     color: c.content,
     cursor: disabled ? 'default' : 'pointer',
     pointerEvents: disabled ? 'none' : 'auto',
-    fontFamily: FONT,
+    fontFamily: 'var(--font\\/serif)',
   };
 
   let box: CSSProperties;
@@ -97,8 +95,8 @@ export function Button(props: ButtonProps) {
 
   const iconStyle: CSSProperties = { fontSize: 20, lineHeight: 1, color: c.content };
   const labelStyle: CSSProperties = {
-    fontSize: 14,
-    letterSpacing: '0.04em',
+    fontSize: 'var(--typography\\/button\\/size)',
+    letterSpacing: 'var(--typography\\/button\\/letter-spacing)',
     textTransform: 'uppercase',
     lineHeight: 1,
     color: c.content,
@@ -162,9 +160,9 @@ export function Tooltip({ label }: { label: string }) {
     >
       <span
         style={{
-          fontFamily: FONT,
-          fontSize: 10,
-          letterSpacing: '0.04em',
+          fontFamily: 'var(--font\\/serif)',
+          fontSize: 'var(--typography\\/button-small\\/size)',
+          letterSpacing: 'var(--typography\\/button-small\\/letter-spacing)',
           textTransform: 'uppercase',
           color: C.popoverForeground,
           textAlign: 'center',

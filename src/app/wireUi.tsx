@@ -11,7 +11,7 @@
  * Switching screens just toggles the engine mode and swaps the surrounding chrome — no remount.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CanvasHost } from './CanvasHost';
 import { Toolbar } from './Toolbar';
 import { TopBar } from './TopBar';
@@ -25,6 +25,7 @@ import { PaperStockConfigurator } from './PaperStockConfigurator';
 import { PaperCuttingEngine } from '../engine/EditorEngine';
 import { symmetricalTriangle } from '../core/foldConfig';
 import type { DesignState, EngineTool, PaperStockProps } from '../engine/api';
+import type { Point } from '../core/geometry';
 import type { ColorPreset, PaperProperties } from './types';
 import { COLOR_PRESET_HEX } from './types';
 
@@ -76,6 +77,8 @@ export function Studio() {
   const [paperConfigOpen, setPaperConfigOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [printPreviewUrl, setPrintPreviewUrl] = useState<string | null>(null);
+  const [printCuts, setPrintCuts] = useState<readonly (readonly Point[])[]>([]);
+  const importInputRef = useRef<HTMLInputElement>(null);
   // Tool-parameter state, surfaced by the Selected-tool submenu sliders (pencil width, stamp size,
   // scissors cut-fit). Defaults mirror what the engine is seeded with on mount.
   const [pencilWidth, setPencilWidth] = useState(1.6);
@@ -147,6 +150,37 @@ export function Studio() {
     engine.setMode('draw');
   };
 
+  const handleImport = () => {
+    importInputRef.current?.click();
+  };
+
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const parsed = JSON.parse(ev.target?.result as string) as DesignState & {
+          toolParams?: { pencilWidth?: number; stampSize?: number; scissorsMargin?: number };
+        };
+        if ('version' in parsed) {
+          engine.loadDesignState(parsed);
+          handleApplyPaperStock(parsed.stock ?? {});
+          if (parsed.toolParams) {
+            if (parsed.toolParams.pencilWidth !== undefined) handlePencilWidth(parsed.toolParams.pencilWidth);
+            if (parsed.toolParams.stampSize !== undefined) handleStampSize(parsed.toolParams.stampSize);
+            if (parsed.toolParams.scissorsMargin !== undefined) handleScissorsMargin(parsed.toolParams.scissorsMargin);
+          }
+          if (screen === 'preview') goToEditor();
+        }
+      } catch {
+        // ignore invalid JSON
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = ''; // reset so the same file can be re-imported
+  };
+
   const handleNew = () => {
     if ((cuts > 0 || outlines > 0) && !window.confirm('Clear the current design?')) return;
     engine.clearPaths();
@@ -165,6 +199,7 @@ export function Studio() {
   // Print: open the print-preview dialog (M7) showing the to-scale instruction sheet.
   const handlePrint = () => {
     setPrintPreviewUrl(engine.getPreviewImageUrl());
+    setPrintCuts(engine.getDesignState().cuts);
     setPrintOpen(true);
   };
   // Save: download the full design state as JSON (cuts + fold + stock + tool params).
@@ -183,20 +218,40 @@ export function Studio() {
     URL.revokeObjectURL(url);
   };
 
+  const editorActive = screen === 'editor';
+  const previewActive = screen === 'preview';
+  // Fade strategy for the top bar (not over the canvas): full-coverage absolute wrappers are fine
+  // since no canvas lives under them. visibility:hidden flips at the end of the transition so
+  // buttons are non-interactive once invisible.
+  const barFadeBase: React.CSSProperties = { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, transition: 'opacity 250ms ease, visibility 250ms' };
+  const editorBarFade: React.CSSProperties = { ...barFadeBase, opacity: editorActive ? 1 : 0, visibility: editorActive ? 'visible' : 'hidden' };
+  const previewBarFade: React.CSSProperties = { ...barFadeBase, opacity: previewActive ? 1 : 0, visibility: previewActive ? 'visible' : 'hidden' };
+  // Fade strategy for chrome OVER the canvas: zero-height wrappers (no position:absolute, so they
+  // don't block the canvas hit region). The absolutely-positioned children (Toolbar, InstructionsCard
+  // etc.) remain positioned relative to `main` — unchanged from before the wrappers existed.
+  // visibility:hidden gates interactivity of the entire inactive subtree.
+  const chromeFadeBase: React.CSSProperties = { transition: 'opacity 250ms ease, visibility 250ms' };
+  const editorChromeFade: React.CSSProperties = { ...chromeFadeBase, opacity: editorActive ? 1 : 0, visibility: editorActive ? 'visible' : 'hidden' };
+  const previewChromeFade: React.CSSProperties = { ...chromeFadeBase, opacity: previewActive ? 1 : 0, visibility: previewActive ? 'visible' : 'hidden' };
+
   return (
     <div style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {screen === 'editor' ? (
-        <TopBar
-          onNew={handleNew}
-          // TODO(import): the real target is the `lotus-cross` template, but it isn't built yet (only
-          // `test-circles` exists). Loading `test-circles` for now so the button is functional; swap to
-          // `lotus-cross` once that template's geometry is pinned.
-          onImport={() => engine.loadTemplate('test-circles')}
-          onShare={goToPreview}
-        />
-      ) : (
-        <PreviewTopBar onBack={goToEditor} onNew={handleNew} />
-      )}
+      {/* Top bar — both bars always mounted; fade between them */}
+      <div style={{ position: 'relative', height: 42, flexShrink: 0 }}>
+        <div style={editorBarFade}>
+          <TopBar
+            onNew={handleNew}
+            // TODO(import): the real target is the `lotus-cross` template, but it isn't built yet (only
+            // `test-circles` exists). Loading `test-circles` for now so the button is functional; swap to
+            // `lotus-cross` once that template's geometry is pinned.
+            onImport={handleImport}
+            onShare={goToPreview}
+          />
+        </div>
+        <div style={previewBarFade}>
+          <PreviewTopBar onBack={goToEditor} onNew={handleNew} />
+        </div>
+      </div>
       <main
         style={{
           flex: 1,
@@ -209,34 +264,33 @@ export function Studio() {
         }}
       >
         <CanvasHost engine={engine} />
-        {screen === 'editor' ? (
-          <>
-            <Toolbar
-              activeTool={tool}
-              canUndo={history.canUndo}
-              canRedo={history.canRedo}
-              pencilWidth={pencilWidth}
-              stampSize={stampSize}
-              scissorsMargin={scissorsMargin}
-              onUndo={() => engine.undo()}
-              onRedo={() => engine.redo()}
-              onTool={chooseTool}
-              onPencilWidth={handlePencilWidth}
-              onStampSize={handleStampSize}
-              onScissorsMargin={handleScissorsMargin}
-            />
-            <PreviewPanel />
-          </>
-        ) : (
-          <>
-            <InstructionsCard />
-            <PreviewBottomBar
-              onPrint={handlePrint}
-              onSave={handleSave}
-              onShare={() => setShareOpen(true)}
-            />
-          </>
-        )}
+        {/* Editor chrome — zero-height wrapper; children remain positioned relative to main */}
+        <div style={editorChromeFade}>
+          <Toolbar
+            activeTool={tool}
+            canUndo={history.canUndo}
+            canRedo={history.canRedo}
+            pencilWidth={pencilWidth}
+            stampSize={stampSize}
+            scissorsMargin={scissorsMargin}
+            onUndo={() => engine.undo()}
+            onRedo={() => engine.redo()}
+            onTool={chooseTool}
+            onPencilWidth={handlePencilWidth}
+            onStampSize={handleStampSize}
+            onScissorsMargin={handleScissorsMargin}
+          />
+          <PreviewPanel />
+        </div>
+        {/* Preview chrome — zero-height wrapper */}
+        <div style={previewChromeFade}>
+          <InstructionsCard />
+          <PreviewBottomBar
+            onPrint={handlePrint}
+            onSave={handleSave}
+            onShare={() => setShareOpen(true)}
+          />
+        </div>
       </main>
       <PaperStockConfigurator
         open={paperConfigOpen}
@@ -249,9 +303,17 @@ export function Studio() {
         url={shareUrlFor(engine.getDesignState())}
         onClose={() => setShareOpen(false)}
       />
+      <input
+        ref={importInputRef}
+        type="file"
+        accept=".json"
+        style={{ display: 'none' }}
+        onChange={handleImportFile}
+      />
       <PrintDialog
         open={printOpen}
         fold={symmetricalTriangle}
+        cuts={printCuts}
         previewImageUrl={printPreviewUrl}
         onClose={() => setPrintOpen(false)}
       />

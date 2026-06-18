@@ -2,17 +2,21 @@
  * PrintLayout — the printable paper-cutting instruction sheet (M7).
  *
  * Two zones on one page:
- *   1. A square at the top (width = print paper width) showing the unfolded design at scale.
- *      This is the result the user is making — useful as a reference while cutting.
- *   2. A tear-off instruction strip at the bottom with fold-sequence thumbnails and
- *      a scaled wedge cut template.
+ *   1. A square at the top (width = print paper width) holding the *to-scale cutting template*:
+ *      the folded wedge outline (open edge solid, folded edges dashed creases) with the cut-out
+ *      borders drawn as light dotted guide lines. You fold a sheet of the print-paper width the same
+ *      way, lay this on top, and cut along the dotted lines through the folded stack.
+ *   2. A tear-off instruction strip at the bottom with the fold-sequence thumbnails and a small
+ *      expected-result preview for reference.
  *
- * Sizes are in `mm` so print output is physically accurate. `transform: scale()`
- * in the dialog wrapper makes the preview fit on-screen.
+ * Sizes are in `mm` so print output is physically accurate — the wedge template prints at the size of
+ * the wedge you get by folding a sheet of `printSpec.widthMm`. `transform: scale()` in the dialog
+ * wrapper makes the on-screen preview fit.
  */
 
 import type { CSSProperties } from 'react';
 import type { FoldConfig } from '../core/foldConfig';
+import { boundaryPointAtAngle, type Point } from '../core/geometry';
 
 const FONT = "'Shippori Antique B1', serif";
 
@@ -130,6 +134,97 @@ function FoldSteps({ fold, thumbPx }: { fold: FoldConfig; thumbPx: number }) {
   );
 }
 
+// ── To-scale folded-wedge cut template ──────────────────────────────────────────────────────────
+
+/** The wedge outline (unit space): apex at the origin + the two outer-edge corners. Mirrors
+ *  WedgeEditor.wedgeVertices / EditorEngine.wedgeVerts. */
+function wedgeVertices(fold: FoldConfig): Point[] {
+  return [
+    { x: 0, y: 0 },
+    boundaryPointAtAngle(fold.wedgeStart, 0.5),
+    boundaryPointAtAngle(fold.wedgeEnd, 0.5),
+  ];
+}
+
+interface WedgeTemplateProps {
+  readonly fold: FoldConfig;
+  /** Composed cut contours in unit-square coords (`DesignState.cuts`) — the full unfolded pattern.
+   *  Clipped to the wedge here, so only the fundamental-domain cut borders show. */
+  readonly cuts: readonly (readonly Point[])[];
+  /** Side of the (square) zone in mm. The full unfolded sheet is `sideMm` wide, so 1 unit = `sideMm`
+   *  mm and the folded wedge prints to-scale at half that. */
+  readonly sideMm: number;
+}
+
+/**
+ * The to-scale cut template: an SVG (coordinates in mm) of the folded wedge with cut borders as light
+ * dotted guide lines. The wedge is centred in the square zone; cut contours are clipped to the wedge
+ * triangle so they terminate cleanly at the fold edges (exactly where you stop cutting).
+ */
+function WedgeTemplate({ fold, cuts, sideMm }: WedgeTemplateProps) {
+  const W = sideMm;
+  // unit (origin-centred, y-up) → mm (zone, y-down), wedge bbox centre (0.25, 0.25) → zone centre.
+  const X = (u: Point) => W / 2 + (u.x - 0.25) * W;
+  const Y = (u: Point) => W / 2 - (u.y - 0.25) * W;
+  const path = (pts: readonly Point[], close: boolean) =>
+    pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${X(p).toFixed(2)},${Y(p).toFixed(2)}`).join(' ') +
+    (close ? ' Z' : '');
+
+  const [apex, c1, c2] = wedgeVertices(fold);
+  const wedgePath = path([apex!, c1!, c2!], true);
+  const hasCuts = cuts.some((c) => c.length >= 3);
+
+  // Light dotted cut-guide stroke; round caps render the dashes as soft dots.
+  const cutStroke: Record<string, string | number> = {
+    fill: 'none',
+    stroke: '#9a9a9a',
+    strokeWidth: 0.6,
+    strokeDasharray: '0.01 1.7',
+    strokeLinecap: 'round',
+  };
+
+  return (
+    <svg
+      width={`${W}mm`}
+      height={`${W}mm`}
+      viewBox={`0 0 ${W} ${W}`}
+      style={{ display: 'block', width: '100%', height: '100%' }}
+    >
+      <defs>
+        <clipPath id="wedge-clip">
+          <path d={wedgePath} />
+        </clipPath>
+      </defs>
+
+      {/* Cut borders — clipped to the wedge so they read as the lines you cut along. */}
+      {hasCuts && (
+        <g clipPath="url(#wedge-clip)">
+          {cuts.map((c, i) =>
+            c.length >= 3 ? <path key={i} d={path(c, true)} {...cutStroke} /> : null,
+          )}
+        </g>
+      )}
+
+      {/* Folded edges (apex → each corner): dashed = crease/fold notation. */}
+      <path d={path([apex!, c1!], false)} fill="none" stroke="#999" strokeWidth={0.5} strokeDasharray="2 1.5" />
+      <path d={path([apex!, c2!], false)} fill="none" stroke="#999" strokeWidth={0.5} strokeDasharray="2 1.5" />
+      {/* Open edge (outer paper boundary): solid. */}
+      <path d={path([c1!, c2!], false)} fill="none" stroke="#666" strokeWidth={0.6} />
+
+      {!hasCuts && (
+        <text
+          x={W / 2}
+          y={W / 2}
+          textAnchor="middle"
+          style={{ fontSize: W * 0.022, fill: '#ccc', fontFamily: FONT, letterSpacing: '0.1em' }}
+        >
+          NO CUTS YET
+        </text>
+      )}
+    </svg>
+  );
+}
+
 // ── PrintLayout ───────────────────────────────────────────────────────────────────────────────────
 
 export interface PrintSpec {
@@ -147,15 +242,17 @@ export const PRINT_SPECS: Record<string, PrintSpec> = {
 export interface PrintLayoutProps {
   readonly fold: FoldConfig;
   readonly printSpec: PrintSpec;
+  /** Composed cut contours (`DesignState.cuts`, unit-square coords) for the to-scale cut template. */
+  readonly cuts: readonly (readonly Point[])[];
+  /** Colour preview of the unfolded result — used as a small reference thumbnail in the strip. */
   readonly previewImageUrl: string | null;
-  readonly paperColor?: string;
 }
 
 export function PrintLayout({
   fold,
   printSpec,
+  cuts,
   previewImageUrl,
-  paperColor = '#c8102e',
 }: PrintLayoutProps) {
   const { widthMm, heightMm } = printSpec;
   const squareMm = widthMm; // top zone: full page width × full page width = square
@@ -177,39 +274,37 @@ export function PrintLayout({
         overflow: 'hidden',
       }}
     >
-      {/* ── Zone 1: Unfolded design at scale ── */}
+      {/* ── Zone 1: To-scale folded-wedge cut template ── */}
       <div
         style={{
           width: `${squareMm}mm`,
           height: `${squareMm}mm`,
           flexShrink: 0,
           position: 'relative',
-          background: '#f9f6f2',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          background: 'white',
           overflow: 'hidden',
         }}
       >
-        {previewImageUrl ? (
-          <img
-            src={previewImageUrl}
-            alt="Unfolded pattern"
-            style={{ width: '100%', height: '100%', display: 'block', objectFit: 'contain' }}
-          />
-        ) : (
-          <span
-            style={{
-              fontFamily: FONT,
-              fontSize: 12,
-              color: '#ccc',
-              letterSpacing: '0.1em',
-              textTransform: 'uppercase',
-            }}
-          >
-            No cuts yet
-          </span>
-        )}
+        <WedgeTemplate fold={fold} cuts={cuts} sideMm={squareMm} />
+        {/* Heading + scissors hint, top-left. */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 6,
+            left: 8,
+            fontFamily: FONT,
+            fontSize: 9,
+            color: '#999',
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+            lineHeight: 1.5,
+          }}
+        >
+          Cut template (to scale)
+          <div style={{ fontSize: 7.5, color: '#bbb', textTransform: 'none', letterSpacing: '0.04em' }}>
+            ✂ cut the folded stack along the dotted lines
+          </div>
+        </div>
         {/* Subtle corner label */}
         <div
           style={{
@@ -279,7 +374,36 @@ export function PrintLayout({
         >
           How to fold
         </div>
-        <FoldSteps fold={fold} thumbPx={thumbPx} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4mm' }}>
+          <FoldSteps fold={fold} thumbPx={thumbPx} />
+          {/* Small expected-result reference — the unfolded design after cutting. */}
+          {previewImageUrl && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1mm', flexShrink: 0 }}>
+              <img
+                src={previewImageUrl}
+                alt="Unfolded result"
+                style={{
+                  width: `${stripMm * 0.5}mm`,
+                  height: `${stripMm * 0.5}mm`,
+                  objectFit: 'contain',
+                  border: '0.5px solid #e5e0da',
+                  background: '#f9f6f2',
+                }}
+              />
+              <span
+                style={{
+                  fontFamily: FONT,
+                  fontSize: 6.5,
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                  color: '#bbb',
+                }}
+              >
+                Result
+              </span>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

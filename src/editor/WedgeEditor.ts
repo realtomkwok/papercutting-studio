@@ -262,46 +262,15 @@ export class WedgeEditor {
       wedge.fillColor = PAPER_FILL; // the paper sheet is red (matches the final design)
     }
 
-    // Outline: the open edge (the outer paper boundary) is solid; the two folded edges (apex → each
-    // outer corner) are dashed, the conventional fold/crease notation.
-    const [apex, c1, c2] = this.wedgeVertices().map((v) => this.unitToView(v));
+    // Open edge only — no dashed crease lines on the folded edges (they don't represent actual crease
+    // positions in the final paper and are visually confusing on top of the paper texture).
+    const [, c1, c2] = this.wedgeVertices().map((v) => this.unitToView(v));
     const edgeColor = new paper.Color(0.4, 0.05, 0.1);
     const openEdge = new paper.Path({ segments: [c1!, c2!] });
     openEdge.strokeColor = edgeColor;
     openEdge.strokeWidth = 1.5;
-    for (const corner of [c1!, c2!]) {
-      const crease = new paper.Path({ segments: [apex!, corner] });
-      crease.strokeColor = edgeColor;
-      crease.strokeWidth = 1.5;
-      crease.dashArray = [2, 4];
-    }
-
-    // Labels at the mid-radius of each folded edge and just outside the open edge.
-    const startMid = boundaryPointAtAngle(this.fold.wedgeStart, 0.25);
-    const endMid = boundaryPointAtAngle(this.fold.wedgeEnd, 0.25);
-    const openMid = boundaryPointAtAngle((this.fold.wedgeStart + this.fold.wedgeEnd) / 2, 0.5);
-    this.addLabel('folded edge', { x: startMid.x, y: startMid.y - 0.03 });
-    this.addLabel('folded edge', { x: endMid.x - 0.04, y: endMid.y + 0.04 });
-    this.addLabel('open edge', { x: openMid.x + 0.06, y: openMid.y });
   }
 
-  private addLabel(text: string, at: Point): void {
-    const label = new paper.PointText(this.unitToView(at));
-    label.content = text;
-    label.fillColor = new paper.Color('#2e2926');
-    label.fontFamily = 'Shippori Antique B1';
-    label.fontSize = 11;
-    label.justification = 'center';
-
-    // Tooltip-style pill background (mirrors the React Tooltip component: popover bg + border).
-    const p = 6;
-    const b = label.bounds;
-    const box = new paper.Path.Rectangle({ from: [b.left - p, b.top - p], to: [b.right + p, b.bottom + p] });
-    box.fillColor = new paper.Color('#f5f2ef');
-    box.strokeColor = new paper.Color('#9a9088');
-    box.strokeWidth = 1;
-    box.insertBelow(label);
-  }
 
   /**
    * Redraw, from model state, the three editor layers: the committed cuts (holes), the pencil sketch
@@ -313,22 +282,23 @@ export class WedgeEditor {
     this.pathsLayer.removeChildren();
     this.pathsLayer.activate();
 
-    // Pencil sketch — the draft ink lines (open polylines), light graphite on the red paper. Drawn
-    // FIRST so the cut holes below paint over the ink that bounds an area once it's cut out, and
-    // clipped to the wedge so any ink drawn off the paper is invisible.
-    const inkLines: paper.Path[] = [];
-    for (const stroke of this.model.strokes) {
-      if (stroke.length < 2) continue;
-      const line = new paper.Path({ segments: stroke.map((p) => this.unitToView(p)) });
-      line.strokeColor = INK_STROKE;
-      line.strokeWidth = this.pencilWidth;
-      line.strokeCap = 'round';
-      line.strokeJoin = 'round';
-      inkLines.push(line);
-    }
-    if (inkLines.length > 0) {
-      const inkGroup = new paper.Group([this.wedgeViewPath(), ...inkLines]);
-      inkGroup.clipped = true; // first child masks the ink to the wedge
+    // Pencil sketch — shown only when NOT in scissors mode (scissors shows region highlights instead,
+    // making the raw strokes redundant noise while cutting).
+    if (this.current !== 'scissors') {
+      const inkLines: paper.Path[] = [];
+      for (const stroke of this.model.strokes) {
+        if (stroke.length < 2) continue;
+        const line = new paper.Path({ segments: stroke.map((p) => this.unitToView(p)) });
+        line.strokeColor = INK_STROKE;
+        line.strokeWidth = this.pencilWidth;
+        line.strokeCap = 'round';
+        line.strokeJoin = 'round';
+        inkLines.push(line);
+      }
+      if (inkLines.length > 0) {
+        const inkGroup = new paper.Group([this.wedgeViewPath(), ...inkLines]);
+        inkGroup.clipped = true; // first child masks the ink to the wedge
+      }
     }
 
     // Committed cuts punch holes in the red paper: fill the merged removed-region with the background

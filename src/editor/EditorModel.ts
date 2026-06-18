@@ -239,7 +239,8 @@ export class EditorModel {
 
     // Otherwise cut the uncut enclosed area(s).
     const uncut = this.regions; // already filters out areas that are committed
-    const targets = at ? uncut.filter((r) => pointInPolygon(at, r)) : uncut;
+    // With a cursor point, cut at most one region per click so overlapping areas merge progressively.
+    const targets = at ? uncut.filter((r) => pointInPolygon(at, r)).slice(0, 1) : uncut;
     if (targets.length === 0) return false;
 
     let working = [...this.strokes];
