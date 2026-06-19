@@ -23,6 +23,9 @@ export interface DesignState {
   readonly stock: PaperStockProps;
 }
 
+/** The four stamp shapes (unit patterns). */
+export type StampTool = 'crescent' | 'circle' | 'sawtooth' | 'triangle';
+
 /** The cutting tools (lasso model). `scissors` is a lasso: draw a freeform path and the enclosed area
  *  is cut out immediately. The stamp kinds drop a saved unit pattern and cut it out immediately too.
  *  `erase` removes a committed cut (tap a cut-out to un-cut it). */

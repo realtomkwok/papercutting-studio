@@ -65,7 +65,7 @@ export class WedgeEditor {
   private rotateStart: { angle: number; deg: number } | null = null;
 
   /** Stamp radius in unit-square units (settable via the size slider). */
-  private stampSize = 0.12;
+  private stampSize = 0.03;
 
   constructor(
     private readonly scope: paper.PaperScope,
@@ -324,9 +324,10 @@ export class WedgeEditor {
     }
     if (STAMP_KINDS[tool]) {
       this.clearGhost();
-      // A stamp drops its closed outline (first point repeated) and that area is cut immediately.
+      // A stamp commits its exact polygon directly (skipping the raster detector so the cut
+      // matches the ghost preview — the detector's dilation would shift the boundary).
       const outline = makeStamp(STAMP_KINDS[tool], u, this.stampSize);
-      this.model.lassoCut([...outline, outline[0]!]);
+      this.model.commit(outline);
       return;
     }
     // Scissors: begin a freeform lasso draft — the enclosed area is cut out on release.
@@ -364,8 +365,9 @@ export class WedgeEditor {
     // Smooth the freehand jitter, then FLATTEN the curve back into line segments before reading
     // points — `simplify()` alone leaves bézier handles our plain point model can't keep. Flatten
     // samples it faithfully into a dense polyline.
-    draft.simplify(2.5); // smooth freehand jitter (dev-spec §4)
-    draft.flatten(3); // → dense polyline following the curve, no handles
+    // draft.simplify(1); // smooth freehand jitter (dev-spec §4)
+    // draft.flatten(5); // → dense polyline following the curve, no handles
+    draft.smooth()
     const pts = draft.segments.map((s) => this.viewToUnit(s.point));
     this.draftGroup?.remove();
     this.draftGroup = null;

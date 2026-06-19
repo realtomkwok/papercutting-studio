@@ -19,7 +19,7 @@
 
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
-import type { EngineTool } from '../engine/api';
+import type { EngineTool, StampTool } from '../engine/api';
 import { Button, Tooltip } from './Button';
 import eraserIcon from '../assets/icons/tool-eraser.svg';
 import stampIcon from '../assets/icons/tool-stamp.svg';
@@ -42,11 +42,13 @@ export interface ToolbarProps {
   readonly canUndo: boolean;
   readonly canRedo: boolean;
   readonly stampSize: number;
+  readonly stampShape: StampTool;
   readonly scissorsMargin: number;
   readonly onUndo: () => void;
   readonly onRedo: () => void;
   readonly onTool: (tool: EngineTool) => void;
   readonly onStampSize: (v: number) => void;
+  readonly onStampShape: (shape: StampTool) => void;
   readonly onScissorsMargin: (v: number) => void;
 }
 
@@ -60,13 +62,18 @@ const ART: Record<string, Art> = {
 
 // ── per-tool config ──────────────────────────────────────────────────────────
 type SubmenuParam = { tag: string; min: number; max: number; step: number };
-type Entry = { key: string; tool?: EngineTool; label: string; param?: SubmenuParam };
+/** Single-tool entry (scissors, eraser) or multi-shape stamp entry. */
+type Entry =
+  | { key: string; tool: EngineTool; label: string; param?: SubmenuParam; isStamp?: never }
+  | { key: string; isStamp: true; label: string; param: SubmenuParam; tool?: never };
+
+export const STAMP_TOOLS: readonly StampTool[] = ['circle', 'crescent', 'sawtooth', 'triangle'];
 
 const ENTRIES: Entry[] = [
   { key: 'scissors', tool: 'scissors', label: 'scissors'
     /* param: { tag: 'fit', min: -0.03, max: 0.03, step: 0.002 } — restore when submenu is ready */ },
-  { key: 'stamp',    tool: 'circle',   label: 'stamp',   param: { tag: 'size', min: 0.03, max: 0.25, step: 0.005 } },
-  { key: 'eraser',   tool: 'erase',    label: 'eraser' },
+  { key: 'stamp', isStamp: true, label: 'stamp', param: { tag: 'size', min: 0.008, max: 0.06, step: 0.001 } },
+  { key: 'eraser', tool: 'erase', label: 'eraser' },
 ];
 
 // ── shared styles ────────────────────────────────────────────────────────────
@@ -77,7 +84,6 @@ const clipContainer: CSSProperties = {
   transform: 'translateX(-50%)',
   width: 'max-content',
   height: CONTAINER_H,
-  overflow: 'hidden',
   display: 'flex',
   flexDirection: 'column',
   justifyContent: 'flex-end',
@@ -248,27 +254,121 @@ function Slider({ value, min, max, step, onChange }: { value: number; min: numbe
   );
 }
 
-function Submenu({ param, value, onChange }: { param: SubmenuParam; value: number; onChange: (v: number) => void }) {
+// ── stamp shape icons (14×14 SVG for the 20×20 picker button) ─────────────────
+function StampShapeIcon({ kind }: { kind: StampTool }) {
+  switch (kind) {
+    case 'circle':
+      return (
+        <svg viewBox="0 0 20 20" width={14} height={14} fill="currentColor">
+          <circle cx="10" cy="10" r="6" />
+        </svg>
+      );
+    case 'triangle':
+      return (
+        <svg viewBox="0 0 20 20" width={14} height={14} fill="currentColor">
+          <polygon points="10,3 17,17 3,17" />
+        </svg>
+      );
+    case 'sawtooth':
+      return (
+        // flat baseline at top, four teeth pointing down — mirrors the actual stamp polygon
+        <svg viewBox="0 0 20 20" width={14} height={14} fill="currentColor">
+          <path d="M4,8 L5.5,13 L7,8 L8.5,13 L10,8 L11.5,13 L13,8 L14.5,13 L16,8 Z" />
+        </svg>
+      );
+    case 'crescent':
+      return (
+        // outer disk minus an offset inner disk (even-odd), crescent opens to the right
+        <svg viewBox="0 0 20 20" width={14} height={14} fill="currentColor">
+          <path
+            fillRule="evenodd"
+            d="M10,4 A6,6 0 0,1 10,16 A6,6 0 0,1 10,4 Z M13,5.5 A4.5,4.5 0 0,1 13,14.5 A4.5,4.5 0 0,1 13,5.5 Z"
+          />
+        </svg>
+      );
+  }
+}
+
+// ── shape picker button (20×20, toggled fill when selected) ───────────────────
+function ShapePicker({ shape, selected, onClick }: { shape: StampTool; selected: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      title={shape}
+      aria-label={shape}
+      aria-pressed={selected}
+      onClick={onClick}
+      style={{
+        width: 20,
+        height: 20,
+        padding: 0,
+        background: selected ? C.foreground : C.card,
+        border: `1px solid ${C.border}`,
+        borderRadius: 4,
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: selected ? C.background : C.foreground,
+        flexShrink: 0,
+      }}
+    >
+      <StampShapeIcon kind={shape} />
+    </button>
+  );
+}
+
+// ── shared tag-label chip (expand_content icon + label, Figma "Tooltip" section) ──
+function TagChip({ label }: { label: string }) {
+  return (
+    <div
+      style={{
+        height: 24,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+        padding: 4,
+        background: C.card,
+        border: `1px solid ${C.border}`,
+        flexShrink: 0,
+      }}
+    >
+      <span className="material-symbols-outlined" style={{ fontSize: 20, color: C.secondaryForeground }}>
+        expand_content
+      </span>
+      <span style={tagText}>{label}</span>
+    </div>
+  );
+}
+
+function Submenu({
+  param,
+  value,
+  onChange,
+  stampShape,
+  onStampShape,
+}: {
+  param: SubmenuParam;
+  value: number;
+  onChange: (v: number) => void;
+  stampShape?: StampTool;
+  onStampShape?: (s: StampTool) => void;
+}) {
   return (
     <div style={{ height: 24, display: 'flex', alignItems: 'center', background: C.background, border: `1px solid ${C.border}` }}>
-      <div
-        style={{
-          height: 24,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 4,
-          padding: 4,
-          background: C.card,
-          border: `1px solid ${C.border}`,
-        }}
-      >
-        <span className="material-symbols-outlined" style={{ fontSize: 20, color: C.secondaryForeground }}>
-          expand_content
-        </span>
-        <span style={tagText}>{param.tag}</span>
-      </div>
+      <TagChip label={param.tag} />
       <Slider value={value} min={param.min} max={param.max} step={param.step} onChange={onChange} />
+      {stampShape !== undefined && onStampShape && (
+        <>
+          <TagChip label="shapes" />
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center', padding: '0 4px', flexShrink: 0 }}>
+            {STAMP_TOOLS.map((s) => (
+              <ShapePicker key={s} shape={s} selected={s === stampShape} onClick={() => onStampShape(s)} />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -278,13 +378,15 @@ export function Toolbar(props: ToolbarProps) {
   const { activeTool, canUndo, canRedo, onUndo, onRedo, onTool } = props;
   const [hovered, setHovered] = useState<string | null>(null);
 
+  const isStampActive = (STAMP_TOOLS as readonly EngineTool[]).includes(activeTool);
+
   const paramValue = (e: Entry): number => {
-    if (e.tool === 'circle') return props.stampSize;
+    if (e.isStamp) return props.stampSize;
     if (e.tool === 'scissors') return props.scissorsMargin;
     return 0;
   };
   const paramOnChange = (e: Entry): ((v: number) => void) => {
-    if (e.tool === 'circle') return props.onStampSize;
+    if (e.isStamp) return props.onStampSize;
     if (e.tool === 'scissors') return props.onScissorsMargin;
     return () => {};
   };
@@ -306,7 +408,7 @@ export function Toolbar(props: ToolbarProps) {
         {/* Tool row */}
         <div style={toolRow}>
           {ENTRIES.map((e) => {
-            const isSelected = !!e.tool && activeTool === e.tool;
+            const isSelected = e.isStamp ? isStampActive : !!e.tool && activeTool === e.tool;
             const isHovered = hovered === e.key;
             const showSubmenu = isSelected && !!e.param;
             const showTag = !showSubmenu && isHovered;
@@ -321,7 +423,13 @@ export function Toolbar(props: ToolbarProps) {
               >
                 {showSubmenu && e.param && (
                   <div style={popover(true)}>
-                    <Submenu param={e.param} value={paramValue(e)} onChange={paramOnChange(e)} />
+                    <Submenu
+                      param={e.param}
+                      value={paramValue(e)}
+                      onChange={paramOnChange(e)}
+                      stampShape={e.isStamp ? props.stampShape : undefined}
+                      onStampShape={e.isStamp ? props.onStampShape : undefined}
+                    />
                   </div>
                 )}
                 {showTag && (
@@ -335,7 +443,10 @@ export function Toolbar(props: ToolbarProps) {
                   title={e.label}
                   aria-label={e.label}
                   aria-pressed={isSelected}
-                  onClick={() => e.tool && onTool(e.tool)}
+                  onClick={() => {
+                    if (e.isStamp) onTool(props.stampShape);
+                    else if (e.tool) onTool(e.tool);
+                  }}
                 >
                   <div style={{ ...ART_MOTION, filter: shadow, transform: liftFor(state) }}>{renderInner(e.key)}</div>
                 </button>

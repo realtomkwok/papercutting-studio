@@ -24,7 +24,7 @@ import { PrintDialog } from './PrintDialog';
 import { PaperStockConfigurator } from './PaperStockConfigurator';
 import { PaperCuttingEngine } from '../engine/EditorEngine';
 import { symmetricalTriangle } from '../core/foldConfig';
-import type { DesignState, EngineTool, PaperStockProps } from '../engine/api';
+import type { DesignState, EngineTool, PaperStockProps, StampTool } from '../engine/api';
 import {
   buildShareUrl,
   decodeDesign,
@@ -93,7 +93,8 @@ export function Studio() {
   const importInputRef = useRef<HTMLInputElement>(null);
   // Tool-parameter state, surfaced by the Selected-tool submenu sliders (stamp size, scissors
   // cut-fit). Defaults mirror what the engine is seeded with on mount.
-  const [stampSize, setStampSize] = useState(0.12);
+  const [stampSize, setStampSize] = useState(0.03);
+  const [stampShape, setStampShape] = useState<StampTool>('circle');
   const [scissorsMargin, setScissorsMargin] = useState(0);
 
   useEffect(() => {
@@ -122,6 +123,10 @@ export function Studio() {
   const handleStampSize = (v: number) => {
     setStampSize(v);
     engine.setStampSize(v);
+  };
+  const handleStampShape = (shape: StampTool) => {
+    setStampShape(shape);
+    chooseTool(shape);
   };
   const handleScissorsMargin = (v: number) => {
     setScissorsMargin(v);
@@ -288,11 +293,13 @@ export function Studio() {
             canUndo={history.canUndo}
             canRedo={history.canRedo}
             stampSize={stampSize}
+            stampShape={stampShape}
             scissorsMargin={scissorsMargin}
             onUndo={() => engine.undo()}
             onRedo={() => engine.redo()}
             onTool={chooseTool}
             onStampSize={handleStampSize}
+            onStampShape={handleStampShape}
             onScissorsMargin={handleScissorsMargin}
           />
           <PreviewPanel />
