@@ -219,12 +219,32 @@ export class WedgeEditor {
     this.staticLayer.removeChildren();
     this.staticLayer.activate();
 
+    const verts = this.wedgeVertices().map((v) => this.unitToView(v));
+
+    // ── Realistic paper shadow (rendered before the wedge so it sits underneath) ──
+    // Two passes: a tight contact shadow close to the paper edge + a wide diffuse ambient shadow.
+    // The shadow path fill colour is irrelevant (it'll be covered by the wedge drawn on top) — only
+    // the blur spreading *beyond* the wedge boundary is visible. Scale offsets with the view scale
+    // so the shadow stays proportional across zoom levels.
+    const shadowDark = new paper.Color(0.08, 0.04, 0.02);
+    // Contact shadow: very tight blur, close offset — crisp edge shadow like paper resting on a
+    // surface under soft overhead light (matches reference: small spread, clearly readable edge).
+    const contact = new paper.Path({ segments: verts, closed: true });
+    contact.fillColor = shadowDark;
+    contact.shadowColor = new paper.Color(0.08, 0.04, 0.02, 0.28);
+    contact.shadowBlur = this.scale * 0.012;
+    contact.shadowOffset = new paper.Point(this.scale * 0.004, this.scale * 0.014);
+    // Secondary shadow: slightly wider but still contained — adds a thin halo without going blurry.
+    const ambient = new paper.Path({ segments: verts, closed: true });
+    ambient.fillColor = shadowDark;
+    ambient.shadowColor = new paper.Color(0.08, 0.04, 0.02, 0.09);
+    ambient.shadowBlur = this.scale * 0.032;
+    ambient.shadowOffset = new paper.Point(this.scale * 0.003, this.scale * 0.022);
+
+    // ── Wedge (covers the shadow path fills; only the blur beyond its edges is visible) ──
     // The editable wedge triangle, derived from the fold's boundary angles: origin → start-edge
     // corner → end-edge corner. The two rays are the folded edges; the outer span is the open edge.
-    const wedge = new paper.Path({
-      segments: this.wedgeVertices().map((v) => this.unitToView(v)),
-      closed: true,
-    });
+    const wedge = new paper.Path({ segments: verts, closed: true });
     // Outline is drawn separately below so the two folded edges read as dashed crease lines while the
     // open edge stays solid — the wedge path itself carries only the fill (or texture).
 
@@ -246,10 +266,9 @@ export class WedgeEditor {
 
     // Open edge only — no dashed crease lines on the folded edges (they don't represent actual crease
     // positions in the final paper and are visually confusing on top of the paper texture).
-    const [, c1, c2] = this.wedgeVertices().map((v) => this.unitToView(v));
-    const edgeColor = new paper.Color(0.4, 0.05, 0.1);
+    const [, c1, c2] = verts;
     const openEdge = new paper.Path({ segments: [c1!, c2!] });
-    openEdge.strokeColor = edgeColor;
+    openEdge.strokeColor = new paper.Color(0.4, 0.05, 0.1, 0.18);
     openEdge.strokeWidth = 1.5;
   }
 

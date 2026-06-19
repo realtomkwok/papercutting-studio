@@ -124,11 +124,15 @@ const toolButton: CSSProperties = {
   justifyContent: 'center',
 };
 
-// Figma elevation tokens (Elevation/1 → /3). Multi-layer shadows simulate depth of a tall object.
+// Figma elevation tokens — three levels following the physical tool analogy:
+//   active (resting, not selected) = medium elevation: tool sitting on the shelf
+//   hover                          = strongest elevation: tool lifts toward the cursor
+//   selected (pressed)             = lightest elevation: tool sinks when activated
 // color/shadow/10 = rgba(46,41,38,0.2)
 function shadowFor(state: 'active' | 'hover' | 'selected'): string {
   const c = 'rgba(46,41,38,0.2)';
   if (state === 'hover') {
+    // Strongest — 5-layer naturalised shadow for maximum perceived height
     return [
       `drop-shadow(0px 0.7px 0.35px ${c})`,
       `drop-shadow(-0.1px 5px 2.55px ${c})`,
@@ -137,14 +141,15 @@ function shadowFor(state: 'active' | 'hover' | 'selected'): string {
       `drop-shadow(-0.7px 66.7px 34px ${c})`,
     ].join(' ');
   }
-  if (state === 'selected') {
+  if (state === 'active') {
+    // Medium — 3-layer shadow; the resting, unselected state
     return [
       `drop-shadow(0px 0.7px 0.35px ${c})`,
       `drop-shadow(0px 3.1px 1.6px ${c})`,
       `drop-shadow(-0.1px 13.2px 6.75px ${c})`,
     ].join(' ');
   }
-  // active — Elevation/1
+  // selected — lightest (Elevation/1): tool is "pressed in", hugs the surface
   return [
     `drop-shadow(0px 0.7px 0.35px ${c})`,
     `drop-shadow(0px 2.6px 1.35px ${c})`,
@@ -154,11 +159,11 @@ function shadowFor(state: 'active' | 'hover' | 'selected'): string {
 function liftFor(state: 'active' | 'hover' | 'selected'): string {
   switch (state) {
     case 'active':
-      return 'translateY(0)';
+      return 'translateY(-6px)'; // medium lift — resting on the shelf
     case 'hover':
-      return 'translateY(-12px)';
+      return 'translateY(-16px)'; // strongest — rising toward the cursor
     case 'selected':
-      return 'translateY(-6px)';
+      return 'translateY(-16px)'; // lightest — slight lift to acknowledge selection without full rise
   }
 }
 
@@ -411,8 +416,11 @@ export function Toolbar(props: ToolbarProps) {
             const isSelected = e.isStamp ? isStampActive : !!e.tool && activeTool === e.tool;
             const isHovered = hovered === e.key;
             const showSubmenu = isSelected && !!e.param;
-            const showTag = !showSubmenu && isHovered;
-            const state = showSubmenu ? 'selected' : isHovered ? 'hover' : 'active';
+            // Show the tool label tip when selected (no submenu) or hovered — gives feedback that a
+            // tool is active even when the cursor has moved away from the toolbar.
+            const showTag = !showSubmenu && (isSelected || isHovered);
+            // Elevation order: idle (lightest) → selected (medium) → hovered (strongest).
+            const state: 'active' | 'hover' | 'selected' = isHovered ? 'hover' : isSelected ? 'selected' : 'active';
             const shadow = shadowFor(state);
             return (
               <div
