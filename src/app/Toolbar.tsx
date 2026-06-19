@@ -21,6 +21,7 @@ import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { EngineTool, StampTool } from '../engine/api';
 import { Button, Tooltip } from './Button';
+import { PaperShaderBg } from './PaperShaderBg';
 import eraserIcon from '../assets/icons/tool-eraser.svg';
 import stampIcon from '../assets/icons/tool-stamp.svg';
 import scissorsIcon from '../assets/icons/tool-scissors.svg';
@@ -94,15 +95,15 @@ const band: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 'var(--sds-size-space-1200)',
-  background: C.card,
+  position: 'relative',
   borderTop: `1px solid ${C.border}`,
   borderLeft: `1px solid ${C.border}`,
   borderRight: `1px solid ${C.border}`,
 };
 
 // marginLeft -1 overlaps the buttons' left border onto the band's, collapsing the doubled edge line.
-const undoRedoCol: CSSProperties = { display: 'flex', flexDirection: 'column', flexShrink: 0, alignSelf: 'center', marginLeft: -1 };
-const toolRow: CSSProperties = { display: 'flex', gap: 9, alignItems: 'center', flexShrink: 0, alignSelf: 'center' };
+const undoRedoCol: CSSProperties = { display: 'flex', flexDirection: 'column', flexShrink: 0, alignSelf: 'center', marginLeft: -1, position: 'relative', zIndex: 1 };
+const toolRow: CSSProperties = { display: 'flex', gap: 9, alignItems: 'center', flexShrink: 0, alignSelf: 'center', position: 'relative', zIndex: 1 };
 
 const slotWrap: CSSProperties = {
   width: 120,
@@ -407,6 +408,19 @@ export function Toolbar(props: ToolbarProps) {
   return (
     <div style={clipContainer}>
       <div style={band}>
+        {/* Paper texture background for the toolbar band */}
+        <PaperShaderBg
+          colorBack="#eae2dc"
+          colorFront="#d4c4b8"
+          fiber={0.22}
+          fiberSize={0.16}
+          crumples={0.08}
+          crumpleSize={0.45}
+          drops={0.05}
+          roughness={0.88}
+          contrast={0.22}
+          worldSize={256}
+        />
         {/* Undo / redo column — shared Button (icon, disabled state) */}
         <div style={undoRedoCol}>
           <Button type="icon" icon="undo" title="Undo" ariaLabel="Undo" disabled={!canUndo} onClick={onUndo} style={{ marginBottom: -1 }} />

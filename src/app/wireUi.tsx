@@ -23,6 +23,7 @@ import { SharePopup } from './SharePopup';
 import { PrintDialog } from './PrintDialog';
 import { PaperStockConfigurator } from './PaperStockConfigurator';
 import { SidePanel, TEXTURES } from './SidePanel';
+import { PaperShaderBg } from './PaperShaderBg';
 import { PaperCuttingEngine } from '../engine/EditorEngine';
 import { symmetricalTriangle } from '../core/foldConfig';
 import type { DesignState, EngineTool, PaperStockProps, StampTool } from '../engine/api';
@@ -290,11 +291,34 @@ export function Studio() {
           position: 'relative',
           overflow: 'hidden',
           minHeight: 0,
-          backgroundColor: 'var(--color\\/background)',
-          backgroundImage: 'radial-gradient(circle, var(--color\\/border) 1px, transparent 1px)',
-          backgroundSize: '24px 24px',
         }}
       >
+        {/* Paper texture background — absolute first child, naturally behind everything in DOM order */}
+        <PaperShaderBg
+          colorBack="#f5f2ef"
+          colorFront="#e4dcd4"
+          fiber={0.14}
+          fiberSize={0.20}
+          crumples={0.07}
+          crumpleSize={0.60}
+          drops={0.06}
+          roughness={0.90}
+          contrast={0.20}
+          worldSize={512}
+        />
+        {/* Line grid overlay — second absolute child, in front of shader but behind canvas */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            pointerEvents: 'none',
+            backgroundImage: [
+              'linear-gradient(to right, rgba(154,144,136,0.18) 1px, transparent 1px)',
+              'linear-gradient(to bottom, rgba(154,144,136,0.18) 1px, transparent 1px)',
+            ].join(', '),
+            backgroundSize: '24px 24px',
+          }}
+        />
         <CanvasHost engine={engine} />
         {/* Editor chrome — zero-height wrapper; children remain positioned relative to main */}
         <div style={editorChromeFade}>
