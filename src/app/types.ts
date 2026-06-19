@@ -24,7 +24,7 @@ export type ColorPreset =
   | 'dusty-gold'
   | 'warm-ivory';
 
-export type TexturePreset = 'rice-paper' | 'washi' | 'cardstock';
+export type TexturePreset = 'xuan' | 'washi' | 'copypaper';
 
 export interface PaperProperties {
   colorPreset: ColorPreset;

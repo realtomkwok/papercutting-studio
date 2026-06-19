@@ -22,6 +22,7 @@ import { PreviewBottomBar } from './PreviewBottomBar';
 import { SharePopup } from './SharePopup';
 import { PrintDialog } from './PrintDialog';
 import { PaperStockConfigurator } from './PaperStockConfigurator';
+import { SidePanel, TEXTURES } from './SidePanel';
 import { PaperCuttingEngine } from '../engine/EditorEngine';
 import { symmetricalTriangle } from '../core/foldConfig';
 import type { DesignState, EngineTool, PaperStockProps, StampTool } from '../engine/api';
@@ -36,7 +37,16 @@ import type { Point } from '../core/geometry';
 import type { ColorPreset, PaperProperties } from './types';
 import { COLOR_PRESET_HEX } from './types';
 
-/** Reverse map (lowercased hex → preset) so a configurator colour can update the toolbar card. */
+/** Darken a hex colour by multiplying each channel by `factor` (used to derive fiber colour). */
+function darkenHex(hex: string, factor = 0.82): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const ch = (v: number) => Math.round(v * factor).toString(16).padStart(2, '0');
+  return `#${ch(r)}${ch(g)}${ch(b)}`;
+}
+
+/** Reverse map (lowercased hex → preset) so a loaded design colour can update the side panel. */
 const PRESET_BY_HEX = new Map<string, ColorPreset>(
   (Object.entries(COLOR_PRESET_HEX) as [ColorPreset, string][]).map(([preset, hex]) => [
     hex.toLowerCase(),
@@ -82,7 +92,7 @@ export function Studio() {
   const [outlines, setOutlines] = useState(0);
   const [_paperProperties, setPaperProperties] = useState<PaperProperties>({
     colorPreset: 'coral-red',
-    texturePreset: 'rice-paper',
+    texturePreset: 'xuan',
   });
   // Mirrors the M5 paper stock the engine bakes (seeds the configurator); {} = engine defaults.
   const [paperStock, setPaperStock] = useState<PaperStockProps>({});
@@ -212,8 +222,8 @@ export function Studio() {
   const handleApplyPaperStock = (props: PaperStockProps) => {
     setPaperStock(props);
     engine.setPaperStock(props);
-    // Keep the toolbar card in sync if the chosen front colour matches a named preset.
-    const preset = props.colorFront ? PRESET_BY_HEX.get(props.colorFront.toLowerCase()) : undefined;
+    // Keep the side panel card in sync if the paper base colour matches a named preset.
+    const preset = props.colorBack ? PRESET_BY_HEX.get(props.colorBack.toLowerCase()) : undefined;
     if (preset) setPaperProperties((p) => ({ ...p, colorPreset: preset }));
   };
 
@@ -301,6 +311,23 @@ export function Studio() {
             onStampSize={handleStampSize}
             onStampShape={handleStampShape}
             onScissorsMargin={handleScissorsMargin}
+          />
+          <SidePanel
+            colorPreset={_paperProperties.colorPreset}
+            texturePreset={_paperProperties.texturePreset}
+            onColorChange={(preset) => {
+              setPaperProperties((p) => ({ ...p, colorPreset: preset }));
+              const hex = COLOR_PRESET_HEX[preset];
+              handleApplyPaperStock({ ...paperStock, colorBack: hex, colorFront: darkenHex(hex) });
+            }}
+            onTextureChange={(preset) => {
+              setPaperProperties((p) => ({ ...p, texturePreset: preset }));
+              const profile = TEXTURES.find((t) => t.id === preset);
+              if (profile) {
+                const { id: _id, label: _label, ...shaderParams } = profile;
+                handleApplyPaperStock({ ...paperStock, ...shaderParams });
+              }
+            }}
           />
           <PreviewPanel />
         </div>
