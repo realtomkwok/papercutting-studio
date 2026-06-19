@@ -124,35 +124,38 @@ const toolButton: CSSProperties = {
   justifyContent: 'center',
 };
 
-// Figma elevation tokens — three levels following the physical tool analogy:
-//   active (resting, not selected) = medium elevation: tool sitting on the shelf
-//   hover                          = strongest elevation: tool lifts toward the cursor
-//   selected (pressed)             = lightest elevation: tool sinks when activated
-// color/shadow/10 = rgba(46,41,38,0.2)
+// Three elevation levels following the physical tool analogy:
+//   active (resting)  = medium elevation: tool sitting on the shelf
+//   hover             = high elevation: tool lifts toward the cursor
+//   selected (pressed) = low elevation: tool sinks when activated
+// Values are drop-shadow() translations of --shadow-elevation-* (spread omitted — not supported).
 function shadowFor(state: 'active' | 'hover' | 'selected'): string {
-  const c = 'rgba(46,41,38,0.2)';
+  const sc = 'var(--shadow-color)';
   if (state === 'hover') {
-    // Strongest — 5-layer naturalised shadow for maximum perceived height
+    // High elevation — rising toward the cursor
     return [
-      `drop-shadow(0px 0.7px 0.35px ${c})`,
-      `drop-shadow(-0.1px 5px 2.55px ${c})`,
-      `drop-shadow(-0.1px 13.4px 6.85px ${c})`,
-      `drop-shadow(-0.4px 31.8px 16.2px ${c})`,
-      `drop-shadow(-0.7px 66.7px 34px ${c})`,
+      `drop-shadow(0.2px 0.5px 0.5px hsl(${sc} / 0.44))`,
+      `drop-shadow(0.5px 1.4px 1.4px hsl(${sc} / 0.40))`,
+      `drop-shadow(1px 3px 2.9px hsl(${sc} / 0.35))`,
+      `drop-shadow(2.1px 6.2px 6px hsl(${sc} / 0.31))`,
+      `drop-shadow(4px 12px 11.6px hsl(${sc} / 0.26))`,
+      `drop-shadow(7.2px 21.2px 20.5px hsl(${sc} / 0.22))`,
     ].join(' ');
   }
   if (state === 'active') {
-    // Medium — 3-layer shadow; the resting, unselected state
+    // Medium elevation — resting on the shelf
     return [
-      `drop-shadow(0px 0.7px 0.35px ${c})`,
-      `drop-shadow(0px 3.1px 1.6px ${c})`,
-      `drop-shadow(-0.1px 13.2px 6.75px ${c})`,
+      `drop-shadow(0.2px 0.5px 0.5px hsl(${sc} / 0.42))`,
+      `drop-shadow(0.3px 1px 1px hsl(${sc} / 0.34))`,
+      `drop-shadow(1px 3px 2.9px hsl(${sc} / 0.27))`,
+      `drop-shadow(2.8px 8.2px 7.9px hsl(${sc} / 0.19))`,
     ].join(' ');
   }
-  // selected — lightest (Elevation/1): tool is "pressed in", hugs the surface
+  // selected — low elevation: tool is "pressed in", hugs the surface
   return [
-    `drop-shadow(0px 0.7px 0.35px ${c})`,
-    `drop-shadow(0px 2.6px 1.35px ${c})`,
+    `drop-shadow(0.2px 0.5px 0.5px hsl(${sc} / 0.40))`,
+    `drop-shadow(0.2px 0.7px 0.7px hsl(${sc} / 0.30))`,
+    `drop-shadow(0.6px 1.6px 1.6px hsl(${sc} / 0.21))`,
   ].join(' ');
 }
 

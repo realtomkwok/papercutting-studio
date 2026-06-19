@@ -101,8 +101,25 @@ Add to `index.html` `<style>` or `src/index.css`:
   --color\/destructive:           #c85c4a;
   --color\/destructive-foreground:#f5f2ef;
 
-  /* ── Shadow ── */
-  --color\/shadow\/10:            rgba(46,41,38,0.20);
+  /* ── Shadow tokens ── */
+  --shadow-color:                20deg 6% 67%;
+  --shadow-elevation-low:
+    0.2px 0.5px 0.5px hsl(var(--shadow-color) / 0.4),
+    0.2px 0.7px 0.7px -1.9px hsl(var(--shadow-color) / 0.3),
+    0.6px 1.6px 1.6px -3.9px hsl(var(--shadow-color) / 0.21);
+  --shadow-elevation-medium:
+    0.2px 0.5px 0.5px hsl(var(--shadow-color) / 0.42),
+    0.3px 1px 1px -1.3px hsl(var(--shadow-color) / 0.34),
+    1px 3px 2.9px -2.6px hsl(var(--shadow-color) / 0.27),
+    2.8px 8.2px 7.9px -3.9px hsl(var(--shadow-color) / 0.19);
+  --shadow-elevation-high:
+    0.2px 0.5px 0.5px hsl(var(--shadow-color) / 0.44),
+    0.5px 1.4px 1.4px -0.6px hsl(var(--shadow-color) / 0.4),
+    1px 3px 2.9px -1.3px hsl(var(--shadow-color) / 0.35),
+    2.1px 6.2px 6px -1.9px hsl(var(--shadow-color) / 0.31),
+    4px 12px 11.6px -2.6px hsl(var(--shadow-color) / 0.26),
+    7.2px 21.2px 20.5px -3.3px hsl(var(--shadow-color) / 0.22),
+    11.8px 35px 33.8px -3.9px hsl(var(--shadow-color) / 0.17);
 
   /* ── Spacing ── */
   --sds-size-space-1200:          48px;
@@ -136,22 +153,17 @@ All styles: Shippori Antique B1, Regular (400), `line-height: 1` (except `Typogr
 
 ### Elevation
 
+The elevation aliases point at the shadow tokens above and should be used by components:
+
 ```css
-/* Elevation/1 — Subtle (cards, panel resting state) */
-box-shadow:
-  0px 1px 3px rgba(46,41,38,0.06),
-  0px 2px 1.5px rgba(46,41,38,0.19);
-
-/* Elevation/2 — Raised (dropdowns, tooltips) */
-box-shadow:
-  0px 4px 13px rgba(46,41,38,0.10),
-  0px 4px 4.2px rgba(46,41,38,0.10);
-
-/* Elevation/3 — Floating (modals, popovers) */
-box-shadow:
-  0px 12px 48px 12px rgba(46,41,38,0.10),
-  0px 8px 10px rgba(46,41,38,0.28);
+--elevation\/1: var(--shadow-elevation-low);    /* cards, panel resting state */
+--elevation\/2: var(--shadow-elevation-medium); /* side panel, dropdowns */
+--elevation\/3: var(--shadow-elevation-high);   /* modals, popovers, floating sheets */
 ```
+
+Use `var(--shadow-elevation-low/medium/high)` directly for new code; `var(--elevation\/N)` still resolves correctly for existing usages.
+
+Toolbar tool icons use the equivalent as `filter: drop-shadow()` (spread omitted — unsupported by that function) via `shadowFor()` in `Toolbar.tsx`. Three states: `selected` → low, `active` (resting) → medium, `hover` → high.
 
 **Dotted-grid canvas background** (inline on `<main>` in `wireUi.tsx`):
 ```css

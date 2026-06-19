@@ -125,7 +125,7 @@ export class PaperCuttingEngine implements EditorEngine {
       height: '240px',
       border: '1px solid rgba(0,0,0,0.12)',
       borderRadius: '6px',
-      boxShadow: '0 2px 12px rgba(0,0,0,0.12)',
+      boxShadow: 'var(--shadow-elevation-medium)',
       background: '#faf7f2',
       pointerEvents: 'none',
       zIndex: '5',

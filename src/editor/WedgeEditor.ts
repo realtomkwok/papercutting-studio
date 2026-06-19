@@ -31,7 +31,6 @@ const STAMP_KINDS: Record<string, StampKind> = {
 // cut out. The eraser washes committed cuts in faint cyan to say "tap to remove".
 const PAPER_FILL = new paper.Color('#c8102e');
 const HOLE_FILL = new paper.Color('#faf7f2');
-const CUT_STROKE = new paper.Color(0.55, 0.02, 0.1, 0.8);
 const LASSO_STROKE = new paper.Color(0.0, 0.55, 0.7, 0.95); // live scissors lasso line
 const CUT_HINT_FILL = new paper.Color(0.0, 0.55, 0.7, 0.12); // eraser: a dimmed "tap to remove" hole
 const CUT_HINT_STROKE = new paper.Color(0.0, 0.45, 0.6, 0.5);
@@ -39,6 +38,7 @@ const GHOST_FILL = new paper.Color(1, 1, 1, 0.35); // stamp ghost preview
 const INK_STROKE = new paper.Color(1, 1, 1, 0.92); // stamp ghost outline
 
 export class WedgeEditor {
+  private readonly shadowLayer: paper.Layer;
   private readonly staticLayer: paper.Layer;
   private readonly pathsLayer: paper.Layer;
   private readonly toolLayer: paper.Layer;
@@ -76,6 +76,7 @@ export class WedgeEditor {
     private readonly paperTexture?: PaperTextureSource,
   ) {
     this.scope.activate();
+    this.shadowLayer = new paper.Layer(); // must be first — rendered below the wedge fill
     this.staticLayer = new paper.Layer();
     this.pathsLayer = new paper.Layer();
     this.toolLayer = new paper.Layer();
@@ -221,27 +222,7 @@ export class WedgeEditor {
 
     const verts = this.wedgeVertices().map((v) => this.unitToView(v));
 
-    // ── Realistic paper shadow (rendered before the wedge so it sits underneath) ──
-    // Two passes: a tight contact shadow close to the paper edge + a wide diffuse ambient shadow.
-    // The shadow path fill colour is irrelevant (it'll be covered by the wedge drawn on top) — only
-    // the blur spreading *beyond* the wedge boundary is visible. Scale offsets with the view scale
-    // so the shadow stays proportional across zoom levels.
-    const shadowDark = new paper.Color(0.08, 0.04, 0.02);
-    // Contact shadow: very tight blur, close offset — crisp edge shadow like paper resting on a
-    // surface under soft overhead light (matches reference: small spread, clearly readable edge).
-    const contact = new paper.Path({ segments: verts, closed: true });
-    contact.fillColor = shadowDark;
-    contact.shadowColor = new paper.Color(0.08, 0.04, 0.02, 0.28);
-    contact.shadowBlur = this.scale * 0.012;
-    contact.shadowOffset = new paper.Point(this.scale * 0.004, this.scale * 0.014);
-    // Secondary shadow: slightly wider but still contained — adds a thin halo without going blurry.
-    const ambient = new paper.Path({ segments: verts, closed: true });
-    ambient.fillColor = shadowDark;
-    ambient.shadowColor = new paper.Color(0.08, 0.04, 0.02, 0.09);
-    ambient.shadowBlur = this.scale * 0.032;
-    ambient.shadowOffset = new paper.Point(this.scale * 0.003, this.scale * 0.022);
-
-    // ── Wedge (covers the shadow path fills; only the blur beyond its edges is visible) ──
+    // ── Wedge (shadow is rebuilt in refresh() so it tracks cut holes; see shadowLayer) ──
     // The editable wedge triangle, derived from the fold's boundary angles: origin → start-edge
     // corner → end-edge corner. The two rays are the folded edges; the outer span is the open edge.
     const wedge = new paper.Path({ segments: verts, closed: true });
@@ -281,13 +262,47 @@ export class WedgeEditor {
    */
   refresh(): void {
     this.scope.activate();
+
+    // ── Shadow layer — rebuilt here so it tracks the cut silhouette ──────────
+    // CompoundPath with evenodd: outer = wedge, inners = cut holes. Canvas only casts shadow from
+    // filled pixels, so no shadow bleeds through the holes. Three passes mirror --shadow-elevation-high.
+    this.shadowLayer.removeChildren();
+    this.shadowLayer.activate();
+    const shadowVerts = this.wedgeVertices().map((v) => this.unitToView(v));
+    const contours = this.model.composedContours;
+    const shadowDark = new paper.Color(0.08, 0.04, 0.02);
+    const makeSilhouette = () =>
+      new paper.CompoundPath({
+        children: [
+          new paper.Path({ segments: shadowVerts, closed: true }),
+          ...contours.map(
+            (pts) => new paper.Path({ segments: pts.map((p) => this.unitToView(p)), closed: true }),
+          ),
+        ],
+        fillRule: 'evenodd',
+      });
+    const s1 = makeSilhouette();
+    s1.fillColor = shadowDark;
+    s1.shadowColor = new paper.Color(0.08, 0.04, 0.02, 0.36);
+    s1.shadowBlur = this.scale * 0.016;
+    s1.shadowOffset = new paper.Point(this.scale * 0.005, this.scale * 0.022);
+    const s2 = makeSilhouette();
+    s2.fillColor = shadowDark;
+    s2.shadowColor = new paper.Color(0.08, 0.04, 0.02, 0.18);
+    s2.shadowBlur = this.scale * 0.055;
+    s2.shadowOffset = new paper.Point(this.scale * 0.004, this.scale * 0.04);
+    const s3 = makeSilhouette();
+    s3.fillColor = shadowDark;
+    s3.shadowColor = new paper.Color(0.08, 0.04, 0.02, 0.09);
+    s3.shadowBlur = this.scale * 0.12;
+    s3.shadowOffset = new paper.Point(this.scale * 0.003, this.scale * 0.07);
+
     this.pathsLayer.removeChildren();
     this.pathsLayer.activate();
 
     // Committed cuts punch holes in the red paper: fill the merged removed-region with the background
     // colour (even-odd so island-holes render correctly), so they read as hollow like the final piece.
     // Painted over the ink, so a cut area's pencil lines disappear under the clean hole.
-    const contours = this.model.composedContours;
     if (contours.length > 0) {
       const buildRegion = () =>
         new paper.CompoundPath({
@@ -296,16 +311,21 @@ export class WedgeEditor {
           ),
           fillRule: 'evenodd',
         });
-      // Punch real holes: erase the red paper (and the ink it encloses) so the dotted-grid backdrop
-      // shows through the cut, exactly like the removed paper of the finished piece. `destination-out`
-      // composites against everything already drawn beneath, leaving those pixels transparent.
+      // Punch real holes: erase the red paper so the dotted-grid backdrop shows through the cut,
+      // exactly like the removed paper of the finished piece. `destination-out` composites against
+      // everything already drawn beneath (including shadowLayer), leaving those pixels transparent.
       const hole = buildRegion();
       hole.fillColor = HOLE_FILL; // colour is irrelevant under destination-out; alpha 1 = full erase
       hole.blendMode = 'destination-out';
-      // Redraw the clean cut edge on top — the erase above would otherwise remove its own outline.
+      // Cut edge — drawn AFTER destination-out so its shadow survives and appears on both sides:
+      // inward into the transparent hole (depth on the exposed surface) and outward onto the paper
+      // surface (a crisp paper-edge shadow). This is the border that traces the cut paper.
       const edge = buildRegion();
-      edge.strokeColor = CUT_STROKE;
-      edge.strokeWidth = 0.75;
+      edge.strokeColor = new paper.Color(0.08, 0.04, 0.02, 0.6);
+      edge.strokeWidth = 1.5;
+      edge.shadowColor = new paper.Color(0.08, 0.04, 0.02, 0.5);
+      edge.shadowBlur = this.scale * 0.006;
+      edge.shadowOffset = new paper.Point(this.scale * 0.0015, this.scale * 0.003);
     }
 
     // Eraser overlay: a dimmed cyan wash over each committed cut so the user knows a tap removes it.

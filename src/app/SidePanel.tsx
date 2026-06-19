@@ -228,9 +228,7 @@ function LiveTextureSwatch({ profile, selected }: { profile: TextureProfile; sel
         width: '100%',
         height: 88,
         overflow: 'hidden',
-        boxShadow: selected
-          ? '-0.1px 13px 14px -3px rgba(46,41,38,0.12), 0 3px 3px -2px rgba(46,41,38,0.10), 0 0.7px 0.7px rgba(46,41,38,0.10)'
-          : '0 2.6px 2.7px -3px rgba(46,41,38,0.10), 0 0.7px 0.7px rgba(46,41,38,0.10)',
+        boxShadow: selected ? 'var(--shadow-elevation-medium)' : 'var(--shadow-elevation-low)',
         outline: selected ? '2px solid var(--color\\/foreground)' : 'none',
         outlineOffset: selected ? -2 : 0,
         transition: 'box-shadow 150ms, outline 150ms',
@@ -280,7 +278,7 @@ const s: Record<string, CSSProperties> = {
     width: 240,
     background: 'var(--color\\/popover)',
     border: '1px solid var(--color\\/border)',
-    boxShadow: '0 2.6px 1.4px rgba(46,41,38,0.10), 0 0.7px 0.4px rgba(46,41,38,0.10)',
+    boxShadow: 'var(--shadow-elevation-low)',
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',

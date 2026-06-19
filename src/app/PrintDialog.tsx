@@ -179,7 +179,7 @@ export function PrintDialog({
               width: Math.round(paperWidthPx * scale),
               height: Math.round(paperHeightPx * scale),
               overflow: 'hidden',
-              boxShadow: '0 4px 24px rgba(0,0,0,0.25)',
+              boxShadow: 'var(--shadow-elevation-high)',
               flexShrink: 0,
             }}
           >

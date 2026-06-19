@@ -307,7 +307,7 @@ const panel: CSSProperties = {
   maxWidth: '92vw',
   maxHeight: '90vh',
   overflow: 'auto',
-  boxShadow: '0 12px 48px rgba(0,0,0,0.3)',
+  boxShadow: 'var(--shadow-elevation-high)',
   font: '13px system-ui, sans-serif',
 };
 
