@@ -8,8 +8,15 @@
  *
  *   1. Re-shaping into a terse object (`{v,f,c,s,k}`) with point lists flattened to integer arrays
  *      (each unit-square coordinate × 1e4 — precision 1e-4, far finer than the ~0.5% snap epsilon).
- *   2. DEFLATE-compressing the JSON (numeric geometry is highly repetitive → compresses well).
- *   3. base64url so the result is URL-safe with no `%`-escaping bloat.
+ *   2. Delta-encoding each contour: the first point is absolute, every later coordinate is stored as
+ *      its offset from the previous point. Adjacent contour points are close, so the deltas are small
+ *      integers — far fewer digits than full-magnitude coords, and far more repetitive, so the JSON is
+ *      both smaller pre-compression and squeezes harder under DEFLATE. Lossless (exact `Math.round`).
+ *   3. DEFLATE-compressing the JSON (numeric geometry is highly repetitive → compresses well).
+ *   4. base64url so the result is URL-safe with no `%`-escaping bloat.
+ *
+ * Keeping the payload small matters most for the printed QR code (M7): byte-mode QR version 40 at EC
+ * level M tops out at ~2331 bytes, and over-long designs simply can't be encoded.
  *
  * Encoding/decoding are async (the Compression Streams API is async). Old `base64(JSON)` links still
  * decode via {@link decodeLegacyDesign}, so links shared before this change keep working.
@@ -27,27 +34,45 @@ const Q = 1e4; // coordinate quantisation: unit-square coord × 1e4 → integer 
 
 /** Terse on-the-wire shape. Keys are 1 char to keep the pre-compression JSON small. */
 interface Packed {
-  readonly v: 1;
+  /** Format version: 1 = absolute coords, 2 = delta-encoded coords. Both are still decoded. */
+  readonly v: 1 | 2;
   readonly f: string;
-  /** Cut contours: each a flat `[x0,y0,x1,y1,…]` of integers (coord × 1e4). */
+  /** Cut contours: each a flat `[x0,y0,dx1,dy1,…]` of integers (coord × 1e4, delta-encoded for v2). */
   readonly c: readonly number[][];
   /** Pending strokes (usually empty in the lasso model), same packing as `c`. */
   readonly s: readonly number[][];
   readonly k: PaperStockProps;
 }
 
+/** Pack a contour to integers (coord × 1e4), delta-encoded: first point absolute, rest as offsets. */
 const packPoints = (pts: readonly Point[]): number[] => {
   const out: number[] = [];
+  let px = 0;
+  let py = 0;
   for (const p of pts) {
-    out.push(Math.round(p.x * Q), Math.round(p.y * Q));
+    const x = Math.round(p.x * Q);
+    const y = Math.round(p.y * Q);
+    out.push(x - px, y - py);
+    px = x;
+    py = y;
   }
   return out;
 };
 
-const unpackPoints = (flat: readonly number[]): Point[] => {
+/** Inverse of {@link packPoints}: `delta` selects v2 (cumulative) vs legacy v1 (absolute) decoding. */
+const unpackPoints = (flat: readonly number[], delta: boolean): Point[] => {
   const out: Point[] = [];
+  let x = 0;
+  let y = 0;
   for (let i = 0; i + 1 < flat.length; i += 2) {
-    out.push({ x: flat[i]! / Q, y: flat[i + 1]! / Q });
+    if (delta) {
+      x += flat[i]!;
+      y += flat[i + 1]!;
+    } else {
+      x = flat[i]!;
+      y = flat[i + 1]!;
+    }
+    out.push({ x: x / Q, y: y / Q });
   }
   return out;
 };
@@ -89,7 +114,7 @@ const inflate = (data: Uint8Array) => pipeThrough(data, new DecompressionStream(
 /** Encode a design into the compact+compressed `?d=` payload (base64url). */
 export async function encodeDesign(state: DesignState): Promise<string> {
   const packed: Packed = {
-    v: 1,
+    v: 2,
     f: state.foldId,
     c: state.cuts.map(packPoints),
     s: state.strokes.map(packPoints),
@@ -106,12 +131,13 @@ export async function decodeDesign(param: string): Promise<DesignState | null> {
     const bytes = base64UrlToBytes(param);
     const json = new TextDecoder().decode(await inflate(bytes));
     const p = JSON.parse(json) as Packed;
-    if (p.v !== 1 || typeof p.f !== 'string') return null;
+    if ((p.v !== 1 && p.v !== 2) || typeof p.f !== 'string') return null;
+    const delta = p.v === 2;
     return {
       version: 1,
       foldId: p.f,
-      cuts: (p.c ?? []).map(unpackPoints),
-      strokes: (p.s ?? []).map(unpackPoints),
+      cuts: (p.c ?? []).map((c) => unpackPoints(c, delta)),
+      strokes: (p.s ?? []).map((s) => unpackPoints(s, delta)),
       stock: p.k ?? {},
     };
   } catch {

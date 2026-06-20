@@ -135,18 +135,6 @@
   --sds-typography-subheading-size-small: var(--typography\/body-large\/size);
 }
 
-/* Tool hover-tooltip / selected-submenu entrance (Toolbar) */
-@keyframes toolPopoverIn {
-  from {
-    opacity: 0;
-    transform: translate(-50%, 8px);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, 0);
-  }
-}
-
 * {
   box-sizing: border-box;
 }
@@ -163,18 +151,31 @@ body {
 }
 
 /* ── Print: show only the instruction sheet ──────────────────────────────── */
+/* Print-only copy of the layout: hidden on screen, only revealed for the print job (see
+ * PrintDialog). Rendered outside any transformed ancestor so its print positioning is exact. */
+.print-root {
+  display: none;
+}
+
 @media print {
-  /* Invisibilise everything; .print-layout punches back through with visibility:visible. */
+  /* Invisibilise everything; the .print-root copy punches back through with visibility:visible.
+     The on-screen dialog (inside a transform: scale wrapper) is removed from the print flow. */
   body * {
     visibility: hidden;
   }
-  .print-layout,
-  .print-layout * {
+  .print-dialog-overlay {
+    display: none !important;
+  }
+  .print-root {
+    display: block;
+  }
+  .print-root,
+  .print-root * {
     visibility: visible;
   }
-  /* Position at top-left of the page. Width/height are set inline (mm) from the chosen spec. */
-  .print-layout {
-    position: absolute;
+  /* Fill the page at true size, anchored top-left. No transformed ancestor → no scaling. */
+  .print-root .print-layout {
+    position: fixed;
     top: 0;
     left: 0;
     margin: 0;

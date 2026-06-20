@@ -62,6 +62,8 @@ export interface PrintDialogProps {
   /** Composed cut contours (`DesignState.cuts`) for the to-scale wedge template. */
   readonly cuts: readonly (readonly Point[])[];
   readonly previewImageUrl: string | null;
+  /** Shareable preview URL — printed as a QR code on the sheet. */
+  readonly shareUrl: string | null;
   readonly onClose: () => void;
 }
 
@@ -70,6 +72,7 @@ export function PrintDialog({
   fold,
   cuts,
   previewImageUrl,
+  shareUrl,
   onClose,
 }: PrintDialogProps) {
   const [sizeKey, setSizeKey] = useState<string>('A4');
@@ -103,25 +106,19 @@ export function PrintDialog({
   };
 
   return (
-    <div style={overlay} onClick={onClose}>
+    <>
+    {/* Print-only copy, rendered OUTSIDE the scaled preview wrapper. A CSS `transform` on an
+        ancestor makes `position: fixed` descendants scale + offset with it, so the in-dialog
+        preview (transform: scale) cannot be reused for printing — it would print tiny in the
+        corner. This copy has no transformed ancestor, so it fills the page at true mm size. */}
+    <div className="print-root" aria-hidden>
+      <PrintLayout fold={fold} printSpec={spec} cuts={cuts} previewImageUrl={previewImageUrl} shareUrl={shareUrl} />
+    </div>
+
+    <div className="print-dialog-overlay" style={overlay} onClick={onClose}>
       <div style={{ ...panel, maxWidth: Math.round(paperWidthPx * scale) + 48 }} onClick={(e) => e.stopPropagation()}>
         {/* ── Toolbar ── */}
         <div style={toolbar}>
-          <span
-            style={{
-              fontFamily: FONT,
-              fontSize: 12,
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              color: 'var(--color\\/foreground)',
-              flexShrink: 0,
-            }}
-          >
-            Print instructions
-          </span>
-
-          <div style={{ width: 1, height: 20, background: 'var(--color\\/border)', flexShrink: 0 }} />
-
           {/* Print paper size */}
           <span style={labelStyle}>Print on</span>
           {Object.keys(PRINT_SPECS).map((key) => (
@@ -196,11 +193,13 @@ export function PrintDialog({
                 printSpec={spec}
                 cuts={cuts}
                 previewImageUrl={previewImageUrl}
+                shareUrl={shareUrl}
               />
             </div>
           </div>
         </div>
       </div>
     </div>
+    </>
   );
 }

@@ -173,15 +173,16 @@ function liftFor(state: 'active' | 'hover' | 'selected'): string {
 
 const ART_MOTION: CSSProperties = { transition: 'filter 180ms ease, transform 180ms ease', willChange: 'filter, transform' };
 
-function popover(interactive: boolean): CSSProperties {
+function popover(interactive: boolean, visible: boolean): CSSProperties {
   return {
     position: 'absolute',
     left: '50%',
     bottom: 134,
-    transform: 'translate(-50%, 0)',
+    transform: visible ? 'translate(-50%, 0)' : 'translate(-50%, 8px)',
+    opacity: visible ? 1 : 0,
     zIndex: 2,
-    pointerEvents: interactive ? 'auto' : 'none',
-    animation: 'toolPopoverIn 160ms ease',
+    pointerEvents: interactive && visible ? 'auto' : 'none',
+    transition: 'opacity 160ms ease, transform 160ms ease',
   };
 }
 
@@ -446,8 +447,8 @@ export function Toolbar(props: ToolbarProps) {
                 onPointerEnter={() => setHovered(e.key)}
                 onPointerLeave={() => setHovered((h) => (h === e.key ? null : h))}
               >
-                {showSubmenu && e.param && (
-                  <div style={popover(true)}>
+                {e.param && (
+                  <div style={popover(true, showSubmenu)}>
                     <Submenu
                       param={e.param}
                       value={paramValue(e)}
@@ -457,11 +458,9 @@ export function Toolbar(props: ToolbarProps) {
                     />
                   </div>
                 )}
-                {showTag && (
-                  <div style={popover(false)}>
-                    <Tooltip label={e.label} />
-                  </div>
-                )}
+                <div style={popover(false, showTag)}>
+                  <Tooltip label={e.label} />
+                </div>
                 <button
                   type="button"
                   style={toolButton}

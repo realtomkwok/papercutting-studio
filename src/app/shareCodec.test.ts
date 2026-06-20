@@ -47,6 +47,34 @@ describe('shareCodec', () => {
     expect(encoded).not.toMatch(/[+/=%]/);
   });
 
+  it('delta-encoded v2 is no larger than the old absolute-coord encoding', async () => {
+    const design = sampleDesign();
+    const v2 = await encodeDesign(design);
+    // Reconstruct an absolute-coord (v1-style) payload the way the codec used to produce it.
+    const Q = 1e4;
+    const abs = (pts: readonly { x: number; y: number }[]) =>
+      pts.flatMap((p) => [Math.round(p.x * Q), Math.round(p.y * Q)]);
+    const legacyPacked = {
+      v: 1,
+      f: design.foldId,
+      c: design.cuts.map(abs),
+      s: design.strokes.map(abs),
+      k: design.stock,
+    };
+    const json = new TextEncoder().encode(JSON.stringify(legacyPacked));
+    const buf = await new Response(
+      (() => {
+        const ts = new CompressionStream('deflate-raw');
+        const w = ts.writable.getWriter();
+        void w.write(json);
+        void w.close();
+        return ts.readable;
+      })(),
+    ).arrayBuffer();
+    const v1Len = Math.ceil((new Uint8Array(buf).length * 4) / 3);
+    expect(v2.length).toBeLessThanOrEqual(v1Len);
+  });
+
   it('returns null for malformed input', async () => {
     expect(await decodeDesign('not-valid-base64!!')).toBeNull();
   });
