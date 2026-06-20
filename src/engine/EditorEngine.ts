@@ -430,6 +430,8 @@ export class PaperCuttingEngine implements EditorEngine {
 
   setPaperStock(props: PaperStockProps): void {
     this.stockProps = props;
+    // Sync the 2D editor's wedge fill / cut-edge / lasso colour to the selected paper colour.
+    if (props.colorBack) this.editor?.setPaperColor(props.colorBack);
     // Re-bake the paper-shaders colour map + crease composite for the new stock; the baker repaints
     // the 3D view via its onBaked callback when the (async) render completes.
     void this.paperBaker?.bake(props);
@@ -453,6 +455,7 @@ export class PaperCuttingEngine implements EditorEngine {
     for (const stroke of state.strokes) this.model.drawStroke(stroke);
     if (state.stock) {
       this.stockProps = state.stock;
+      if (state.stock.colorBack) this.editor?.setPaperColor(state.stock.colorBack);
       void this.paperBaker?.bake(state.stock);
     }
   }

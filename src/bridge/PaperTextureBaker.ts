@@ -265,6 +265,10 @@ export class PaperTextureBaker {
     const pctx = probe.getContext('2d');
     const hasContent = (): boolean => {
       if (!canvas || canvas.width === 0 || canvas.height === 0 || !pctx) return false;
+      // Also wait for the ResizeObserver to size the canvas up to the target resolution — snapshotting
+      // a first frame that's still at the mount's tiny default size would upscale into the 1024² map
+      // and look blurry. (`< 0.99·res` so a fractional-pixel rounding never wedges the loop.)
+      if (canvas.width < this.resolution * 0.99 || canvas.height < this.resolution * 0.99) return false;
       try {
         // Downscale the whole frame into 1×1 and read it: a non-zero alpha means something was drawn.
         pctx.clearRect(0, 0, 1, 1);

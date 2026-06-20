@@ -100,6 +100,7 @@ export function Studio() {
   const [paperConfigOpen, setPaperConfigOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [printPreviewUrl, setPrintPreviewUrl] = useState<string | null>(null);
+  const [printShareUrl, setPrintShareUrl] = useState<string | null>(null);
   const [printCuts, setPrintCuts] = useState<readonly (readonly Point[])[]>([]);
   const importInputRef = useRef<HTMLInputElement>(null);
   // Tool-parameter state, surfaced by the Selected-tool submenu sliders (stamp size, scissors
@@ -117,12 +118,20 @@ export function Studio() {
     // Seed the engine with the initial tool-param values.
     engine.setStampSize(stampSize);
     engine.setScissorsMargin(scissorsMargin);
+    // Seed the wedge colour from the initially-selected swatch — otherwise the engine falls back to its
+    // own hardcoded default, which won't match the selected preset. A URL-restored design (below)
+    // overrides this with its own stock.
+    const initialHex = COLOR_PRESET_HEX[_paperProperties.colorPreset];
+    handleApplyPaperStock({ colorBack: initialHex, colorFront: darkenHex(initialHex) });
     // Restore a shared design from the URL (?d= compact, legacy ?design= full state, or legacy
     // ?stock= stock only). Async because the compact codec decompresses asynchronously.
     void designFromUrl().then((fromUrl) => {
       if (fromUrl && 'version' in fromUrl) {
         engine.loadDesignState(fromUrl);
         handleApplyPaperStock(fromUrl.stock);
+        // A shared design opens straight into the 3D unfold preview (the recipient wants to *see* the
+        // pattern, not edit a blank-looking folded wedge); the Back button drops into the editor.
+        goToPreview();
       } else if (fromUrl) {
         handleApplyPaperStock(fromUrl as PaperStockProps);
       }
@@ -231,8 +240,12 @@ export function Studio() {
   // ── Preview & Share actions ───────────────────────────────────────────────────────────────────
   // Print: open the print-preview dialog (M7) showing the to-scale instruction sheet.
   const handlePrint = () => {
+    const state = engine.getDesignState();
     setPrintPreviewUrl(engine.getPreviewImageUrl());
-    setPrintCuts(engine.getDesignState().cuts);
+    setPrintCuts(state.cuts);
+    setPrintShareUrl(null);
+    // Build the (async, compressed) preview link so it can be printed as a QR code.
+    void buildShareUrl(state).then(setPrintShareUrl);
     setPrintOpen(true);
   };
   // Save: download the full design state as JSON (cuts + fold + stock + tool params).
@@ -388,6 +401,7 @@ export function Studio() {
         fold={symmetricalTriangle}
         cuts={printCuts}
         previewImageUrl={printPreviewUrl}
+        shareUrl={printShareUrl}
         onClose={() => setPrintOpen(false)}
       />
     </div>

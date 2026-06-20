@@ -26,16 +26,28 @@ const STAMP_KINDS: Record<string, StampKind> = {
   triangle: 'triangle',
 };
 
-// Editor matches the final design: the paper is RED (kept material), holes are the page background
-// (so cuts read as hollow). The scissors draw a live cyan lasso line; on release the enclosed area is
+// Editor matches the final design: the paper is set colour (kept material), holes are the page background
+// (so cuts read as hollow). The scissors draw a live lasso line; on release the enclosed area is
 // cut out. The eraser washes committed cuts in faint cyan to say "tap to remove".
-const PAPER_FILL = new paper.Color('#c8102e');
+const DEFAULT_PAPER_COLOR = '#c8102e';
 const HOLE_FILL = new paper.Color('#faf7f2');
-const LASSO_STROKE = new paper.Color(0.0, 0.55, 0.7, 0.95); // live scissors lasso line
 const CUT_HINT_FILL = new paper.Color(0.0, 0.55, 0.7, 0.12); // eraser: a dimmed "tap to remove" hole
 const CUT_HINT_STROKE = new paper.Color(0.0, 0.45, 0.6, 0.5);
 const GHOST_FILL = new paper.Color(1, 1, 1, 0.35); // stamp ghost preview
 const INK_STROKE = new paper.Color(1, 1, 1, 0.92); // stamp ghost outline
+
+// Edge-label "tooltip" chrome (Figma 47:194): popover-coloured chip with a 1px border and uppercase,
+// letter-spaced caption naming each wedge edge ("folded edge" / "open edge").
+const TOOLTIP_BG = new paper.Color('#f5f2ef');
+const TOOLTIP_BORDER = new paper.Color('#9a9088');
+const TOOLTIP_TEXT = new paper.Color('#2e2926');
+const TOOLTIP_FONT = "'Shippori Antique B1', serif";
+
+/** Multiply a colour's RGB toward black by `factor` (0 = unchanged, 1 = black), keeping alpha. */
+function darken(color: paper.Color, factor: number): paper.Color {
+  const k = 1 - factor;
+  return new paper.Color(color.red * k, color.green * k, color.blue * k, color.alpha);
+}
 
 export class WedgeEditor {
   private readonly shadowLayer: paper.Layer;
@@ -66,6 +78,11 @@ export class WedgeEditor {
 
   /** Stamp radius in unit-square units (settable via the size slider). */
   private stampSize = 0.03;
+
+  /** The selected paper colour — the wedge fill (when no texture) and cut-edge stroke. Synced to the
+   *  side panel via `setPaperColor`. The lasso line uses a slightly darker shade of the same hue. */
+  private paperFill = new paper.Color(DEFAULT_PAPER_COLOR);
+  private lassoStroke = darken(new paper.Color(DEFAULT_PAPER_COLOR), 0.25);
 
   constructor(
     private readonly scope: paper.PaperScope,
@@ -117,6 +134,15 @@ export class WedgeEditor {
 
   setStampSize(size: number): void {
     this.stampSize = Math.max(0.01, size);
+  }
+
+  /** Sync the wedge fill / cut-edge colour to the colour selected on the side panel, and derive the
+   *  lasso line as a slightly darker shade of it. Repaints the static wedge and committed cuts. */
+  setPaperColor(hex: string): void {
+    this.paperFill = new paper.Color(hex);
+    this.lassoStroke = darken(this.paperFill, 0.25);
+    this.drawStatic();
+    this.refresh();
   }
 
   setViewRotation(deg: number): void {
@@ -242,15 +268,63 @@ export class WedgeEditor {
       const group = new paper.Group([clip, raster]);
       group.clipped = true; // first child (the wedge clone) masks the raster to the wedge shape
     } else {
-      wedge.fillColor = PAPER_FILL; // the paper sheet is red (matches the final design)
+      wedge.fillColor = this.paperFill;
     }
 
     // Open edge only — no dashed crease lines on the folded edges (they don't represent actual crease
     // positions in the final paper and are visually confusing on top of the paper texture).
-    const [, c1, c2] = verts;
+    const [apex, c1, c2] = verts;
     const openEdge = new paper.Path({ segments: [c1!, c2!] });
     openEdge.strokeColor = new paper.Color(0.4, 0.05, 0.1, 0.18);
     openEdge.strokeWidth = 1.5;
+
+    // Edge captions ("tooltip" chips, Figma 47:194): the two rays from the apex are the folded edges;
+    // the outer span is the open edge. Each chip sits just *outside* its edge midpoint, offset along the
+    // edge's outward normal (away from the wedge centroid) so it floats off the paper and points at it.
+    const centroid = new paper.Point(
+      (apex!.x + c1!.x + c2!.x) / 3,
+      (apex!.y + c1!.y + c2!.y) / 3,
+    );
+    const labelAt = (a: paper.Point, b: paper.Point, text: string) => {
+      const mid = a.add(b).divide(2);
+      // Outward unit normal: from the centroid through the edge midpoint, pointing off the paper.
+      const outward = mid.subtract(centroid).normalize();
+      this.drawEdgeLabel(mid, outward, text);
+    };
+    labelAt(apex!, c1!, 'folded edge');
+    labelAt(apex!, c2!, 'folded edge');
+    labelAt(c1!, c2!, 'open edge');
+  }
+
+  /** Draw a Figma-style tooltip chip (popover fill + 1px border, uppercase letter-spaced caption) just
+   *  outside an edge: anchored at the edge midpoint `at` and pushed clear of it along `outward` (the
+   *  edge's outward unit normal), into the active static layer. */
+  private drawEdgeLabel(at: paper.Point, outward: paper.Point, text: string): void {
+    const label = new paper.PointText({
+      point: at,
+      content: text.toUpperCase().split('').join(' '), // approximate the design's letter-spacing
+      justification: 'center',
+      fillColor: TOOLTIP_TEXT,
+      fontFamily: TOOLTIP_FONT,
+      fontSize: 10,
+    });
+    // PointText's `point` is the text baseline; centre the chip on the glyph bounds instead.
+    label.position = at;
+    const pad = 8;
+    const box = label.bounds.expand(pad * 2);
+    const chip = new paper.Path.Rectangle({ rectangle: box });
+    chip.fillColor = TOOLTIP_BG;
+    chip.strokeColor = TOOLTIP_BORDER;
+    chip.strokeWidth = 1;
+    chip.insertBelow(label); // keep the caption above its background
+
+    // Push the whole chip clear of the edge along the outward normal: half the chip's extent projected
+    // onto that normal (so it just clears the edge line through `at`) plus a fixed gap.
+    const gap = 14;
+    const reach = (Math.abs(outward.x) * box.width + Math.abs(outward.y) * box.height) / 2 + gap;
+    const shift = outward.multiply(reach);
+    label.translate(shift);
+    chip.translate(shift);
   }
 
 
@@ -321,8 +395,10 @@ export class WedgeEditor {
       // inward into the transparent hole (depth on the exposed surface) and outward onto the paper
       // surface (a crisp paper-edge shadow). This is the border that traces the cut paper.
       const edge = buildRegion();
-      edge.strokeColor = new paper.Color(0.08, 0.04, 0.02, 0.6);
-      edge.strokeWidth = 1.5;
+      edge.strokeColor = this.paperFill;
+      edge.strokeWidth = 1;
+      edge.dashArray = [3, 3]
+      edge.opacity = 0.5
       edge.shadowColor = new paper.Color(0.08, 0.04, 0.02, 0.5);
       edge.shadowBlur = this.scale * 0.006;
       edge.shadowOffset = new paper.Point(this.scale * 0.0015, this.scale * 0.003);
@@ -372,7 +448,7 @@ export class WedgeEditor {
     // Scissors: begin a freeform lasso draft — the enclosed area is cut out on release.
     this.toolLayer.activate();
     this.draft = new paper.Path({ segments: [e.point], closed: false });
-    this.draft.strokeColor = LASSO_STROKE;
+    this.draft.strokeColor = this.lassoStroke;
     this.draft.strokeWidth = 1.5;
     this.draft.strokeCap = 'round';
     // Clip the live lasso to the wedge so the line drawn off the paper is invisible while drawing.

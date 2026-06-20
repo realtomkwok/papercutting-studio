@@ -67,6 +67,28 @@ Print/Save/Share bottom bar, and a share popup. The three actions are currently 
   removed the dashed apex-to-corner lines and both FOLDED EDGE labels; they misrepresented the actual
   fold geometry. Open-edge solid line kept.
 
+## Editor edge labels, colour sync & texture (wired in session)
+
+- [x] **Edge captions re-added as Figma tooltips (47:194).** `WedgeEditor.drawEdgeLabel` draws a
+  popover-coloured chip (border + uppercase letter-spaced caption) for each wedge edge — "FOLDED EDGE"
+  on the two apex rays, "OPEN EDGE" on the outer span — offset *outside* the edge along its outward
+  normal so the chip floats off the paper and points at it. (Supersedes the earlier M6.5 removal above.)
+
+- [x] **Wedge / cut-edge / lasso colour synced to the selected swatch.** `WedgeEditor.setPaperColor`
+  drives `paperFill` (and a slightly darker `lassoStroke`); `EditorEngine.setPaperStock` /
+  `loadDesignState` forward `colorBack`. `wireUi.tsx` seeds it from the initially-selected preset on
+  mount so the first paint matches the swatch instead of the hardcoded default.
+
+- [x] **Crisp initial paper texture.** `PaperTextureBaker.waitForRender` now waits for the
+  paper-shaders canvas to reach target resolution before snapshotting, so a tiny first frame isn't
+  upscaled into the 1024² map (which looked blurry on cold load).
+
+- [ ] **Loading splash screen before first render.** Texture bake and colour application are async, so
+  on cold load the editor briefly shows a flat/unstyled wedge before the baked texture and selected
+  colour land. Add a lightweight splash/loading screen that gates the editor reveal until the first
+  paper-shaders bake has completed (e.g. resolve on the first `onBaked`), so the user never sees the
+  unstyled intermediate state.
+
 ## Design system & UI polish
 
 - [x] **CSS design tokens.** `src/index.css` — full token set added to `:root`: two font families
