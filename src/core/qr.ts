@@ -39,7 +39,7 @@ function reedSolomonComputeDivisor(degree: number): number[] {
   for (let i = 0; i < degree; i++) {
     for (let j = 0; j < result.length; j++) {
       result[j] = reedSolomonMultiply(result[j]!, root);
-      if (j + 1 < result.length) result[j] ^= result[j + 1]!;
+      if (j + 1 < result.length) result[j] = result[j]! ^ result[j + 1]!;
     }
     root = reedSolomonMultiply(root, 0x02);
   }
@@ -52,7 +52,7 @@ function reedSolomonComputeRemainder(data: readonly number[], divisor: readonly 
     const factor = b ^ result.shift()!;
     result.push(0);
     divisor.forEach((coef, i) => {
-      result[i] ^= reedSolomonMultiply(coef, factor);
+      result[i] = result[i]! ^ reedSolomonMultiply(coef, factor);
     });
   }
   return result;
