@@ -123,12 +123,14 @@ export class PaperCuttingEngine implements EditorEngine {
       right: '12px',
       width: '240px',
       height: '240px',
-      border: '1px solid rgba(0,0,0,0.12)',
-      borderRadius: '6px',
+      border: '1px solid var(--color-border, #9a9088)',
       boxShadow: 'var(--shadow-elevation-medium)',
       background: '#faf7f2',
       pointerEvents: 'none',
       zIndex: '5',
+      // Match PreviewPanel's expand/collapse animation exactly (Tailwind `duration-200 ease-out`)
+      // so the live preview and its overlay scrim resize in lockstep.
+      transition: 'width 200ms cubic-bezier(0, 0, 0.2, 1), height 200ms cubic-bezier(0, 0, 0.2, 1)',
     });
     this.previewCanvas.width = 512;
     this.previewCanvas.height = 512;
@@ -387,6 +389,13 @@ export class PaperCuttingEngine implements EditorEngine {
 
   setViewRotation(deg: number): void {
     this.editor?.setViewRotation(deg);
+  }
+
+  setPreviewSize(size: number): void {
+    if (!this.previewCanvas) return;
+    // CSS box only — the 512² backing store is unchanged, so the preview just rescales crisply.
+    this.previewCanvas.style.width = `${size}px`;
+    this.previewCanvas.style.height = `${size}px`;
   }
 
   loadTemplate(id: string): void {

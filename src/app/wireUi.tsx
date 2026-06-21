@@ -112,6 +112,11 @@ export function Studio() {
   const [stampSize, setStampSize] = useState(0.03);
   const [stampShape, setStampShape] = useState<StampTool>('circle');
   const [scissorsMargin, setScissorsMargin] = useState(0);
+  // Corner side-preview size: expanded (240px) ↔ collapsed (120px), mirrored to the engine canvas.
+  // Default collapsed on small screens (< md, 768px) so the preview doesn't crowd a small canvas.
+  const [previewExpanded, setPreviewExpanded] = useState(
+    () => typeof window === 'undefined' || window.innerWidth >= 768,
+  );
 
   useEffect(() => {
     const unsubs = [
@@ -122,6 +127,9 @@ export function Studio() {
     // Seed the engine with the initial tool-param values.
     engine.setStampSize(stampSize);
     engine.setScissorsMargin(scissorsMargin);
+    // Match the engine preview canvas to the initial expanded/collapsed default (240 is its built-in
+    // default, so only the collapsed case needs to push a size).
+    if (!previewExpanded) engine.setPreviewSize(120);
     // Seed the wedge colour from the initially-selected swatch — otherwise the engine falls back to its
     // own hardcoded default, which won't match the selected preset. A URL-restored design (below)
     // overrides this with its own stock.
@@ -390,7 +398,16 @@ export function Studio() {
               }
             }}
           />
-          <PreviewPanel />
+          <PreviewPanel
+            expanded={previewExpanded}
+            onToggle={() => {
+              setPreviewExpanded((v) => {
+                const next = !v;
+                engine.setPreviewSize(next ? 240 : 120);
+                return next;
+              });
+            }}
+          />
         </div>
         {/* Preview chrome — zero-height wrapper */}
         <div style={previewChromeFade}>

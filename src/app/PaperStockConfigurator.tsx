@@ -10,7 +10,6 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
 import {
   ShaderMount,
   getShaderNoiseTexture,
@@ -19,6 +18,15 @@ import {
 } from '@paper-design/shaders';
 import type { PaperStockProps } from '../engine/api';
 import { DEFAULT_PAPER_STOCK, paperTextureUniforms, resolvePaperStock } from '../bridge/paperStock';
+import { Modal } from './Modal';
+
+// ── shared chrome class strings (Tailwind) ────────────────────────────────────
+const BTN =
+  'font-serif text-body-small px-3 py-1.5 border border-border bg-background text-foreground cursor-pointer';
+const PRIMARY_BTN =
+  'font-serif text-body-small px-3 py-1.5 border border-primary bg-primary text-primary-foreground cursor-pointer';
+const GHOST_BTN =
+  'font-serif text-[16px] px-2 py-1 border-none bg-transparent text-foreground cursor-pointer';
 
 /** A fully-specified stock for the controls (no optionals — every field has a live value). */
 type FullStock = Required<PaperStockProps>;
@@ -69,8 +77,6 @@ export function PaperStockConfigurator(props: PaperStockConfiguratorProps) {
     if (open) setStock({ ...DEFAULT_FULL, ...initial });
   }, [open, initial]);
 
-  if (!open) return null;
-
   const set = (key: keyof FullStock, value: number | string) =>
     setStock((s) => ({ ...s, [key]: value }));
 
@@ -107,118 +113,123 @@ export function PaperStockConfigurator(props: PaperStockConfiguratorProps) {
   };
 
   return (
-    <div style={overlay} onClick={onClose}>
-      <div style={panel} onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-          <h2 style={{ margin: 0, fontSize: 16 }}>Paper texture</h2>
-          <span style={{ color: '#999', fontSize: 12 }}>live preview · tune · export · apply</span>
-          <button type="button" style={{ ...ghostBtn, marginLeft: 'auto' }} onClick={onClose}>
-            ✕
-          </button>
-        </div>
+    <Modal
+      open={open}
+      onClose={onClose}
+      labelledBy="paper-stock-title"
+      overlayClassName="bg-black/35"
+      panelClassName="bg-popover border border-border p-[18px] w-[620px] max-w-[92vw] max-h-[90vh] overflow-auto shadow-elevation-high font-serif text-body-small text-foreground"
+    >
+      <div className="flex items-baseline gap-2">
+        <h2 id="paper-stock-title" className="m-0 text-[16px] font-serif">
+          Paper texture
+        </h2>
+        <span className="text-muted-foreground text-caption">
+          live preview · tune · export · apply
+        </span>
+        <button type="button" aria-label="Close" className={`${GHOST_BTN} ml-auto`} onClick={onClose}>
+          ✕
+        </button>
+      </div>
 
-        <div style={{ display: 'flex', gap: 18, marginTop: 12 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <LivePreview stock={stock} />
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', width: 240 }}>
-              {PRESET_COLORS.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  title={c}
-                  onClick={() => set('colorBack', c)}
-                  style={{
-                    width: 22,
-                    height: 22,
-                    borderRadius: '50%',
-                    background: c,
-                    cursor: 'pointer',
-                    border: stock.colorBack === c ? '2px solid #333' : '1px solid rgba(0,0,0,0.25)',
-                  }}
-                />
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: 12 }}>
-              <ColorField
-                label="Paper"
-                value={stock.colorBack}
-                onChange={(v) => set('colorBack', v)}
+      <div className="flex flex-wrap gap-[18px] mt-3">
+        <div className="flex flex-col gap-2.5">
+          <LivePreview stock={stock} />
+          <div className="flex gap-1.5 flex-wrap w-60">
+            {PRESET_COLORS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                title={c}
+                onClick={() => set('colorBack', c)}
+                className="w-[22px] h-[22px] rounded-full cursor-pointer"
+                style={{
+                  background: c,
+                  border: stock.colorBack === c ? '2px solid #333' : '1px solid rgba(0,0,0,0.25)',
+                }}
               />
-              <ColorField
-                label="Fibre"
-                value={stock.colorFront}
-                onChange={(v) => set('colorFront', v)}
-              />
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minWidth: 260 }}>
-            {SLIDERS.map((s) => (
-              <label key={s.key} style={row} title={s.hint}>
-                <span style={{ width: 84, color: '#555' }}>{s.label}</span>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={stock[s.key] as number}
-                  onChange={(e) => set(s.key, Number(e.target.value))}
-                  style={{ flex: 1 }}
-                />
-                <span style={{ width: 34, textAlign: 'right', color: '#888', fontVariantNumeric: 'tabular-nums' }}>
-                  {(stock[s.key] as number).toFixed(2)}
-                </span>
-              </label>
             ))}
           </div>
+          <div className="flex gap-3">
+            <ColorField
+              label="Paper"
+              value={stock.colorBack}
+              onChange={(v) => set('colorBack', v)}
+            />
+            <ColorField
+              label="Fibre"
+              value={stock.colorFront}
+              onChange={(v) => set('colorFront', v)}
+            />
+          </div>
         </div>
 
-        <details style={{ marginTop: 12 }}>
-          <summary style={{ cursor: 'pointer', color: '#666', fontSize: 12 }}>
-            Export / import configuration (JSON)
-          </summary>
-          <textarea
-            readOnly
-            value={exportJson}
-            style={{ width: '100%', height: 96, marginTop: 6, font: '12px ui-monospace, monospace' }}
-          />
-          <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-            <button type="button" style={btn} onClick={copyConfig}>
-              Copy
-            </button>
-            <button type="button" style={btn} onClick={downloadConfig}>
-              Download
-            </button>
-          </div>
-          <textarea
-            placeholder="Paste a configuration here to load it…"
-            value={importText}
-            onChange={(e) => setImportText(e.target.value)}
-            style={{ width: '100%', height: 64, marginTop: 6, font: '12px ui-monospace, monospace' }}
-          />
-          <button type="button" style={btn} onClick={importJson}>
-            Load pasted config
-          </button>
-        </details>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14 }}>
-          <span style={{ color: '#888', fontSize: 12, flex: 1 }}>{status}</span>
-          <button type="button" style={btn} onClick={() => setStock(DEFAULT_FULL)}>
-            Reset
-          </button>
-          <button
-            type="button"
-            style={primaryBtn}
-            onClick={() => {
-              onApply(stock);
-              setStatus('Applied to the design');
-            }}
-          >
-            Apply to design
-          </button>
+        <div className="flex flex-col gap-2 flex-1 min-w-[260px]">
+          {SLIDERS.map((s) => (
+            <label key={s.key} className="flex items-center gap-2" title={s.hint}>
+              <span className="w-[84px] text-secondary-foreground">{s.label}</span>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={stock[s.key] as number}
+                onChange={(e) => set(s.key, Number(e.target.value))}
+                className="flex-1"
+              />
+              <span className="w-[34px] text-right text-muted-foreground tabular-nums">
+                {(stock[s.key] as number).toFixed(2)}
+              </span>
+            </label>
+          ))}
         </div>
       </div>
-    </div>
+
+      <details className="mt-3">
+        <summary className="cursor-pointer text-muted-foreground text-caption">
+          Export / import configuration (JSON)
+        </summary>
+        <textarea
+          readOnly
+          value={exportJson}
+          className="w-full h-24 mt-1.5 font-mono text-caption"
+        />
+        <div className="flex gap-1.5 mt-1.5">
+          <button type="button" className={BTN} onClick={copyConfig}>
+            Copy
+          </button>
+          <button type="button" className={BTN} onClick={downloadConfig}>
+            Download
+          </button>
+        </div>
+        <textarea
+          placeholder="Paste a configuration here to load it…"
+          value={importText}
+          onChange={(e) => setImportText(e.target.value)}
+          className="w-full h-16 mt-1.5 font-mono text-caption"
+        />
+        <button type="button" className={BTN} onClick={importJson}>
+          Load pasted config
+        </button>
+      </details>
+
+      <div className="flex items-center gap-2 mt-3.5">
+        <span className="text-muted-foreground text-caption flex-1">{status}</span>
+        <button type="button" className={BTN} onClick={() => setStock(DEFAULT_FULL)}>
+          Reset
+        </button>
+        <button
+          type="button"
+          className={PRIMARY_BTN}
+          onClick={() => {
+            onApply(stock);
+            setStatus('Applied to the design');
+          }}
+        >
+          Apply to design
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -261,13 +272,8 @@ function LivePreview({ stock }: { stock: FullStock }) {
   return (
     <div
       ref={hostRef}
-      style={{
-        width: 240,
-        height: 240,
-        borderRadius: 8,
-        overflow: 'hidden',
-        boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.12)',
-      }}
+      className="w-60 h-60 overflow-hidden"
+      style={{ boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.12)' }}
     />
   );
 }
@@ -282,48 +288,9 @@ function ColorField({
   onChange: (v: string) => void;
 }) {
   return (
-    <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#555', fontSize: 12 }}>
+    <label className="flex items-center gap-1.5 text-secondary-foreground text-caption">
       {label}
       <input type="color" value={value} onChange={(e) => onChange(e.target.value)} />
     </label>
   );
 }
-
-const overlay: CSSProperties = {
-  position: 'fixed',
-  inset: 0,
-  background: 'rgba(0,0,0,0.35)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  zIndex: 50,
-};
-
-const panel: CSSProperties = {
-  background: '#fff',
-  borderRadius: 10,
-  padding: 18,
-  width: 620,
-  maxWidth: '92vw',
-  maxHeight: '90vh',
-  overflow: 'auto',
-  boxShadow: 'var(--shadow-elevation-high)',
-  font: '13px system-ui, sans-serif',
-};
-
-const row: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8 };
-
-function baseBtn(): CSSProperties {
-  return {
-    padding: '6px 12px',
-    borderRadius: 6,
-    border: '1px solid #d4cdc1',
-    background: '#fff',
-    color: '#333',
-    cursor: 'pointer',
-    font: 'inherit',
-  };
-}
-const btn = baseBtn();
-const primaryBtn: CSSProperties = { ...baseBtn(), background: '#c8102e', color: '#fff', border: '1px solid #c8102e' };
-const ghostBtn: CSSProperties = { ...baseBtn(), border: 'none', padding: '4px 8px' };

@@ -118,6 +118,9 @@ export interface EditorEngine {
   setScissorsMargin(margin: number): void;
   /** Rotate the editor view (the paper) by `deg` — a display convenience; geometry is unchanged. */
   setViewRotation(deg: number): void;
+  /** Resize the corner side-preview box (CSS px, square). The chrome's expand/collapse toggle drives
+   *  this so the live preview and its interactive overlay frame stay the same size. */
+  setPreviewSize(size: number): void;
   loadTemplate(id: string): void;
   loadFoldConfig(id: string): void;
   setUnfoldProgress(t: number): void;

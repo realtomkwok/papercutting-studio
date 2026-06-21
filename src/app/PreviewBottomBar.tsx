@@ -17,7 +17,7 @@ export interface PreviewBottomBarProps {
 
 export function PreviewBottomBar({ onPrint, onSave, onShare }: PreviewBottomBarProps) {
   return (
-    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[6] flex gap-8 items-center justify-center">
+    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[6] flex gap-4 sm:gap-8 items-center justify-center">
       <Button type="icon-text" icon="print" label="Print" onClick={onPrint} />
       <Button type="icon-text" icon="save" label="Save" onClick={onSave} />
       <Button type="icon-text" icon="share" label="Share" onClick={onShare} />
