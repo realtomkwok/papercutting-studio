@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from 'react';
 import { Button } from './Button';
+import { Modal } from './Modal';
 
 export interface SharePopupProps {
   readonly open: boolean;
@@ -23,8 +24,6 @@ export function SharePopup({ open, url, onClose }: SharePopupProps) {
     if (open) setMsg('');
   }, [open]);
 
-  if (!open) return null;
-
   const ready = url.length > 0;
 
   const copy = async () => {
@@ -38,16 +37,19 @@ export function SharePopup({ open, url, onClose }: SharePopupProps) {
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black/35 flex items-center justify-center z-50"
-      onClick={onClose}
+    <Modal
+      open={open}
+      onClose={onClose}
+      labelledBy="share-popup-title"
+      overlayClassName="bg-black/35"
+      panelClassName="bg-popover border border-border p-5 w-[460px] max-w-[92vw] flex flex-col gap-3.5 shadow-elevation-high"
     >
-      <div
-        className="bg-popover border border-border p-5 w-[460px] max-w-[92vw] flex flex-col gap-3.5 shadow-elevation-high"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="flex flex-col gap-3.5">
         <div className="flex items-center">
-          <h2 className="m-0 font-serif text-button tracking-button uppercase text-foreground">
+          <h2
+            id="share-popup-title"
+            className="m-0 font-serif text-button tracking-button uppercase text-foreground"
+          >
             Share
           </h2>
           <button
@@ -76,6 +78,6 @@ export function SharePopup({ open, url, onClose }: SharePopupProps) {
           <Button type="icon-text" icon="link" label="Copy link" onClick={copy} />
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

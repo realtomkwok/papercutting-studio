@@ -332,8 +332,8 @@ export function Toolbar(props: ToolbarProps) {
   // clip container: bottom-anchored, h190 leaves room above the h92 band for tooltip / submenu
   return (
     <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-max h-[190px] flex flex-col justify-end">
-      {/* card band — gap-12 (48px) fits the 80px undo/redo column */}
-      <div className="h-[92px] flex items-center gap-12 relative border-t border-l border-r border-border">
+      {/* card band — gap-12 (48px) fits the 80px undo/redo column; shrinks on narrow screens */}
+      <div className="h-[92px] flex items-center gap-4 sm:gap-12 relative border-t border-l border-r border-border">
         {/* Paper texture background for the toolbar band */}
         <PaperShaderBg
           colorBack="#eae2dc"
@@ -387,7 +387,7 @@ export function Toolbar(props: ToolbarProps) {
             return (
               <div
                 key={e.key}
-                className="w-[120px] h-[92px] flex-shrink-0 relative flex items-center justify-center"
+                className="w-20 sm:w-[120px] h-[92px] flex-shrink-0 relative flex items-center justify-center"
                 onPointerEnter={() => setHovered(e.key)}
                 onPointerLeave={() => setHovered((h) => (h === e.key ? null : h))}
               >

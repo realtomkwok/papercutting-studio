@@ -13,11 +13,7 @@
  */
 
 import type { CSSProperties } from 'react';
-
-/** Join truthy class fragments. */
-function cx(...parts: (string | false | undefined)[]) {
-  return parts.filter(Boolean).join(' ');
-}
+import { cx } from './cx';
 
 export type ButtonType = 'icon' | 'icon-text' | 'option';
 export type ButtonSize = 'm' | 's';

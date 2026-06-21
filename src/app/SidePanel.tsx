@@ -14,6 +14,8 @@ import {
   emptyPixel,
 } from '@paper-design/shaders';
 import { paperTextureUniforms } from '../bridge/paperStock';
+import { Button } from './Button';
+import { cx } from './cx';
 import type { ColorPreset, TexturePreset } from './types';
 import { COLOR_PRESET_HEX } from './types';
 
@@ -104,9 +106,33 @@ export function SidePanel({
 }: SidePanelProps) {
   const [paperOpen, setPaperOpen] = useState(true);
   const [aboutOpen, setAboutOpen] = useState(true);
+  // Below `md`, the 240px panel collapses to a drawer hidden behind a floating toggle so it does not
+  // crowd a small canvas; at `md:`+ it is always shown exactly as on desktop.
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
-    <div className="absolute top-3 left-3 w-60 bg-popover border border-border shadow-elevation-low flex flex-col overflow-x-hidden overflow-y-auto max-h-[calc(100vh-42px-24px)]">
+    <>
+      {/* Mobile-only drawer toggle (md:hidden). Sits above the panel so it can re-close it. */}
+      <div className="md:hidden absolute top-3 left-3 z-20">
+        <Button
+          type="icon-text"
+          icon={drawerOpen ? 'close' : 'palette'}
+          label="Paper"
+          ariaPressed={drawerOpen}
+          onClick={() => setDrawerOpen((v) => !v)}
+        />
+      </div>
+
+      <div
+        className={cx(
+          'absolute left-3 w-60 bg-popover border border-border shadow-elevation-low flex-col overflow-x-hidden overflow-y-auto',
+          // Mobile: drawer sits below the toggle; desktop: at the top like before.
+          'top-16 max-h-[calc(100vh-42px-64px-12px)] z-10',
+          'md:top-3 md:max-h-[calc(100vh-42px-24px)]',
+          drawerOpen ? 'flex' : 'hidden',
+          'md:flex',
+        )}
+      >
       {/* ── PAPER section ─────────────────────────────────────────────────── */}
       <SectionHeader title="Paper" open={paperOpen} onToggle={() => setPaperOpen((v) => !v)} />
 
@@ -180,7 +206,8 @@ export function SidePanel({
           </p>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
 

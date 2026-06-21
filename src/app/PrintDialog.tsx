@@ -12,6 +12,7 @@
 
 import { useState } from 'react';
 import { Button } from './Button';
+import { Modal } from './Modal';
 import { PrintLayout, PRINT_SPECS } from './PrintLayout';
 import type { FoldConfig } from '../core/foldConfig';
 import type { Point } from '../core/geometry';
@@ -74,19 +75,25 @@ export function PrintDialog({
         />
       </div>
 
-      <div
-        className="print-dialog-overlay fixed inset-0 bg-black/50 flex flex-col items-center justify-start z-[60] overflow-y-auto pt-5 px-4 pb-8"
-        onClick={onClose}
+      <Modal
+        open={open}
+        onClose={onClose}
+        labelledBy="print-dialog-title"
+        align="start"
+        overlayClassName="print-dialog-overlay bg-black/50 z-[60] overflow-y-auto pt-5 px-4 pb-8"
+        panelClassName="bg-popover border border-border w-full flex flex-col"
       >
         <div
-          className="bg-popover border border-border w-full flex flex-col"
+          className="flex flex-col w-full mx-auto"
           style={{ maxWidth: Math.round(paperWidthPx * scale) + 48 }}
-          onClick={(e) => e.stopPropagation()}
         >
           {/* ── Toolbar ── */}
           <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border flex-shrink-0">
             {/* Print paper size */}
-            <span className="font-serif text-eyebrow tracking-[0.1em] uppercase text-secondary-foreground flex-shrink-0">
+            <span
+              id="print-dialog-title"
+              className="font-serif text-eyebrow tracking-[0.1em] uppercase text-secondary-foreground flex-shrink-0"
+            >
               Print on
             </span>
             {Object.keys(PRINT_SPECS).map((key) => (
@@ -154,7 +161,7 @@ export function PrintDialog({
             </div>
           </div>
         </div>
-      </div>
+      </Modal>
     </>
   );
 }

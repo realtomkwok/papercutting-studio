@@ -28,17 +28,31 @@ export function TopBar({ onNew, onImport, onShare }: TopBarProps) {
           onClick={onNew}
           style={{ borderBottom: 'none' }}
         />
-        <Button
-          type="icon-text"
-          icon="publish"
-          label="Import Design"
-          onClick={onImport}
-          style={{ borderBottom: 'none' }}
-        />
+        {/* Below md: icon-only so the long label can't collide with the centred title. At md:+
+            there is room for the full icon + label. */}
+        <span className="md:hidden inline-flex">
+          <Button
+            type="icon"
+            icon="publish"
+            title="Import Design"
+            ariaLabel="Import Design"
+            onClick={onImport}
+            style={{ borderBottom: 'none' }}
+          />
+        </span>
+        <span className="hidden md:inline-flex">
+          <Button
+            type="icon-text"
+            icon="publish"
+            label="Import Design"
+            onClick={onImport}
+            style={{ borderBottom: 'none' }}
+          />
+        </span>
       </div>
 
-      {/* Centre: title */}
-      <div className="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-center font-serif text-body-large tracking-body-large uppercase text-foreground">
+      {/* Centre: title — px-2 keeps a gap from the side columns even when truncated */}
+      <div className="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-center px-2 font-serif text-body-large tracking-body-large uppercase text-foreground">
         剪紙 paper cutting studio
       </div>
 
