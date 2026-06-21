@@ -3,45 +3,11 @@
  * Purely presentational: props in, callbacks out, no engine imports. Mirrors the editor `TopBar`
  * layout (three equal columns), but the left button steps *back* to the editor and the right button
  * starts a new design.
- *
- * Token note: escaped-slash token names need a DOUBLE backslash in JS strings (`'var(--color\\/x)'`).
  */
 
-import type { CSSProperties } from 'react';
 import { Button } from './Button';
 
-const C = {
-  card: 'var(--color\\/card)',
-  border: 'var(--color\\/border)',
-  foreground: 'var(--color\\/foreground)',
-} as const;
-
-const bar: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  height: 42,
-  padding: '1px 16px',
-  gap: 10,
-  background: C.card,
-  borderBottom: `1px solid ${C.border}`,
-  flexShrink: 0,
-};
-
-const col: CSSProperties = { flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10 };
-
-const title: CSSProperties = {
-  flex: 1,
-  minWidth: 0,
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
-  textAlign: 'center',
-  fontFamily: 'var(--font\\/serif)',
-  fontSize: 'var(--sds-typography-subheading-size-small)',
-  letterSpacing: 'var(--typography\\/body-large\\/letter-spacing)',
-  textTransform: 'uppercase',
-  color: C.foreground,
-};
+const COL = 'flex-1 min-w-0 flex items-center gap-2.5';
 
 export interface PreviewTopBarProps {
   /** Return to the editor screen (left "← Editor" button). */
@@ -52,17 +18,19 @@ export interface PreviewTopBarProps {
 
 export function PreviewTopBar({ onBack, onNew }: PreviewTopBarProps) {
   return (
-    <div style={bar}>
+    <div className="flex items-center h-[42px] py-px px-4 gap-2.5 bg-card border-b border-border flex-shrink-0">
       {/* Left: back to editor */}
-      <div style={col}>
+      <div className={COL}>
         <Button type="icon-text" icon="arrow_back" label="Editor" onClick={onBack} />
       </div>
 
       {/* Centre: title */}
-      <div style={title}>剪紙 paper cutting studio</div>
+      <div className="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-center font-serif text-body-large tracking-body-large uppercase text-foreground">
+        剪紙 paper cutting studio
+      </div>
 
       {/* Right: new design */}
-      <div style={{ ...col, justifyContent: 'flex-end' }}>
+      <div className={`${COL} justify-end`}>
         <Button type="icon-text" icon="add_2" label="New design" onClick={onNew} />
       </div>
     </div>

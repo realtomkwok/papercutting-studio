@@ -4,20 +4,7 @@
  * edge, mirroring the editor toolbar's floating treatment.
  */
 
-import type { CSSProperties } from 'react';
 import { Button } from './Button';
-
-const bar: CSSProperties = {
-  position: 'absolute',
-  bottom: 16,
-  left: '50%',
-  transform: 'translateX(-50%)',
-  zIndex: 6,
-  display: 'flex',
-  gap: 32,
-  alignItems: 'center',
-  justifyContent: 'center',
-};
 
 export interface PreviewBottomBarProps {
   /** Print the to-scale fold template (M7 — currently a basic `window.print`). */
@@ -30,7 +17,7 @@ export interface PreviewBottomBarProps {
 
 export function PreviewBottomBar({ onPrint, onSave, onShare }: PreviewBottomBarProps) {
   return (
-    <div style={bar}>
+    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[6] flex gap-8 items-center justify-center">
       <Button type="icon-text" icon="print" label="Print" onClick={onPrint} />
       <Button type="icon-text" icon="save" label="Save" onClick={onSave} />
       <Button type="icon-text" icon="share" label="Share" onClick={onShare} />

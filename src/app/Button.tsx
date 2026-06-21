@@ -5,28 +5,19 @@
  *   • type:  'icon' (square, just a glyph) | 'icon-text' (glyph + label) | 'option' (square swatch)
  *   • size:  'm' (40px / h40) | 's' (24px)
  *   • state: Default → light bg + border + dark content
- *            Hover   → dark `--color/primary` fill + inverted (light) content, no visible border
+ *            Hover   → dark `primary` fill + inverted (light) content, no visible border
  *            Disabled→ muted bg + muted content, no interaction
- * Hover is tracked internally (pointer enter/leave) so the glyph/label colour can invert — inline
- * styles can't express `:hover`.
  *
- * Token note: escaped-slash token names need a DOUBLE backslash in JS strings (`'var(--color\\/x)'`).
+ * State is expressed with Tailwind `hover:` / `disabled:` variants (no JS hover tracking) wired to
+ * the design tokens via the generated utilities (`bg-background`, `text-primary-foreground`, …).
  */
 
-import { useState } from 'react';
 import type { CSSProperties } from 'react';
 
-const C = {
-  background: 'var(--color\\/background)',
-  border: 'var(--color\\/border)',
-  foreground: 'var(--color\\/foreground)',
-  primary: 'var(--color\\/primary)',
-  primaryForeground: 'var(--color\\/primary-foreground)',
-  muted: 'var(--color\\/muted)',
-  mutedForeground: 'var(--color\\/muted-foreground)',
-  popover: 'var(--color\\/popover)',
-  popoverForeground: 'var(--color\\/popover-foreground)',
-} as const;
+/** Join truthy class fragments. */
+function cx(...parts: (string | false | undefined)[]) {
+  return parts.filter(Boolean).join(' ');
+}
 
 export type ButtonType = 'icon' | 'icon-text' | 'option';
 export type ButtonSize = 'm' | 's';
@@ -50,93 +41,66 @@ export interface ButtonProps {
   readonly style?: CSSProperties;
 }
 
-function colours(state: 'default' | 'hover' | 'disabled') {
-  if (state === 'hover') return { bg: C.primary, border: C.primary, content: C.primaryForeground };
-  if (state === 'disabled') return { bg: C.muted, border: C.border, content: C.mutedForeground };
-  return { bg: C.background, border: C.border, content: C.foreground };
+// Colour + interaction state, identical across every variant (content colour cascades to glyph/label).
+const STATE =
+  'border bg-background text-foreground border-border ' +
+  'hover:bg-primary hover:text-primary-foreground hover:border-primary ' +
+  'disabled:bg-muted disabled:text-muted-foreground disabled:cursor-default disabled:pointer-events-none';
+const COMMON = 'box-border flex items-center justify-center cursor-pointer font-serif';
+
+function boxClasses(type: ButtonType, size: ButtonSize) {
+  const isM = size === 'm';
+  if (type === 'icon') return isM ? 'w-10 h-10 p-2.5' : 'w-6 h-6 p-0.5';
+  if (type === 'option') return isM ? 'w-10 h-10 p-0.5' : 'w-6 h-6 p-0.5';
+  // icon-text
+  return isM
+    ? 'h-10 gap-2.5 p-2.5 whitespace-nowrap'
+    : 'h-6 gap-1 pt-2.5 pr-2.5 pb-2.5 pl-1 whitespace-nowrap';
 }
 
 export function Button(props: ButtonProps) {
-  const { type = 'icon', size = 'm', icon, iconRight = false, label, swatch, disabled = false, title, ariaLabel, ariaPressed, onClick, style } =
-    props;
-  const [hover, setHover] = useState(false);
-  const state = disabled ? 'disabled' : hover ? 'hover' : 'default';
-  const c = colours(state);
+  const {
+    type = 'icon',
+    size = 'm',
+    icon,
+    iconRight = false,
+    label,
+    swatch,
+    disabled = false,
+    title,
+    ariaLabel,
+    ariaPressed,
+    onClick,
+    style,
+  } = props;
 
-  const isM = size === 'm';
-  const base: CSSProperties = {
-    boxSizing: 'border-box',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: c.bg,
-    border: `1px solid ${c.border}`,
-    color: c.content,
-    cursor: disabled ? 'default' : 'pointer',
-    pointerEvents: disabled ? 'none' : 'auto',
-    fontFamily: 'var(--font\\/serif)',
-  };
-
-  let box: CSSProperties;
-  if (type === 'icon') {
-    box = { ...base, width: isM ? 40 : 24, height: isM ? 40 : 24, padding: isM ? 10 : 2 };
-  } else if (type === 'option') {
-    box = { ...base, width: isM ? 40 : 24, height: isM ? 40 : 24, padding: 2 };
-  } else {
-    // icon-text
-    box = {
-      ...base,
-      height: isM ? 40 : 24,
-      gap: isM ? 10 : 4,
-      padding: isM ? 10 : '10px 10px 10px 4px',
-      whiteSpace: 'nowrap',
-    };
-  }
-
-  const iconStyle: CSSProperties = { fontSize: 20, lineHeight: 1, color: c.content };
-  const labelStyle: CSSProperties = {
-    fontSize: 'var(--typography\\/button\\/size)',
-    letterSpacing: 'var(--typography\\/button\\/letter-spacing)',
-    textTransform: 'uppercase',
-    lineHeight: 1,
-    color: c.content,
-  };
+  const iconGlyph = (
+    <span className="material-symbols-outlined text-[20px] leading-none">{icon}</span>
+  );
 
   return (
     <button
       type="button"
-      style={{ ...box, ...style }}
+      className={cx(COMMON, STATE, boxClasses(type, size))}
+      style={style}
       title={title}
       aria-label={ariaLabel ?? label}
       aria-pressed={ariaPressed}
       disabled={disabled}
       onClick={onClick}
-      onPointerEnter={() => setHover(true)}
-      onPointerLeave={() => setHover(false)}
     >
       {type === 'option' ? (
         <span
-          style={{
-            width: 20,
-            height: 20,
-            borderRadius: 4,
-            background: swatch ?? 'transparent',
-            border: `1px solid ${C.border}`,
-          }}
+          className="w-5 h-5 rounded border border-border"
+          style={{ background: swatch ?? 'transparent' }}
         />
       ) : (
         <>
-          {icon && !iconRight && (
-            <span className="material-symbols-outlined" style={iconStyle}>
-              {icon}
-            </span>
+          {icon && !iconRight && iconGlyph}
+          {type === 'icon-text' && label && (
+            <span className="text-button tracking-button uppercase leading-none">{label}</span>
           )}
-          {type === 'icon-text' && label && <span style={labelStyle}>{label}</span>}
-          {icon && iconRight && (
-            <span className="material-symbols-outlined" style={iconStyle}>
-              {icon}
-            </span>
-          )}
+          {icon && iconRight && iconGlyph}
         </>
       )}
     </button>
@@ -146,28 +110,8 @@ export function Button(props: ButtonProps) {
 /** Tooltip — the hover name-tag that floats above a tool (Figma 42:146 Hover state). */
 export function Tooltip({ label }: { label: string }) {
   return (
-    <div
-      style={{
-        minWidth: 120,
-        height: 44,
-        padding: 8,
-        background: C.popover,
-        border: `1px solid ${C.border}`,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <span
-        style={{
-          fontFamily: 'var(--font\\/serif)',
-          fontSize: 'var(--typography\\/button-small\\/size)',
-          letterSpacing: 'var(--typography\\/button-small\\/letter-spacing)',
-          textTransform: 'uppercase',
-          color: C.popoverForeground,
-          textAlign: 'center',
-        }}
-      >
+    <div className="min-w-[120px] h-11 p-2 bg-popover border border-border flex items-center justify-center">
+      <span className="font-serif text-button-small tracking-button-small uppercase text-popover-foreground text-center">
         {label}
       </span>
     </div>
