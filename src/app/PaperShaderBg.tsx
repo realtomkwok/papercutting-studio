@@ -85,7 +85,19 @@ export function PaperShaderBg({
       u_image: assets.empty,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [colorBack, colorFront, fiber, fiberSize, crumples, crumpleSize, drops, roughness, contrast, seed, worldSize],
+    [
+      colorBack,
+      colorFront,
+      fiber,
+      fiberSize,
+      crumples,
+      crumpleSize,
+      drops,
+      roughness,
+      contrast,
+      seed,
+      worldSize,
+    ],
   );
 
   useEffect(() => {
@@ -104,14 +116,5 @@ export function PaperShaderBg({
     mountRef.current?.setUniforms(uniforms);
   }, [uniforms]);
 
-  return (
-    <div
-      ref={hostRef}
-      style={{
-        position: 'absolute',
-        inset: 0,
-        pointerEvents: 'none',
-      }}
-    />
-  );
+  return <div ref={hostRef} className="absolute inset-0 pointer-events-none" />;
 }

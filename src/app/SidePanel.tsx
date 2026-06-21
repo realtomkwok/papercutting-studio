@@ -1,10 +1,12 @@
 /**
  * SidePanel — left-side panel with Paper (texture + colour) and About sections.
  * Design: Figma node 130:644 / 130:1015 (WFrsqSKE0foMLl1rxMWgqG).
+ *
+ * Static structure is Tailwind utilities; the per-swatch live values (selected outline/shadow,
+ * the runtime `--color-<preset>` swatch fill) stay inline.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
 import {
   ShaderMount,
   getShaderNoiseTexture,
@@ -52,8 +54,8 @@ export const TEXTURES: TextureProfile[] = [
     fiber: 0.22,
     fiberSize: 0.12,
     crumples: 0.08,
-    crumpleSize: 0.60,
-    drops: 0.10,
+    crumpleSize: 0.6,
+    drops: 0.1,
     roughness: 0.92,
     contrast: 0.22,
   },
@@ -78,9 +80,9 @@ export const TEXTURES: TextureProfile[] = [
     fiber: 0.03,
     fiberSize: 0.06,
     crumples: 0.02,
-    crumpleSize: 0.10,
+    crumpleSize: 0.1,
     drops: 0.01,
-    roughness: 0.90,
+    roughness: 0.9,
     contrast: 0.12,
   },
 ];
@@ -89,49 +91,61 @@ const COLOR_PRESETS = Object.keys(COLOR_PRESET_HEX) as ColorPreset[];
 
 const WEBSITE_TOMKWOK = 'https://tomkwok.xyz';
 
-export function SidePanel({ colorPreset, texturePreset, onColorChange, onTextureChange }: SidePanelProps) {
+const SUBSECTION_LABEL =
+  'm-0 font-serif text-label tracking-label uppercase text-muted-foreground whitespace-nowrap';
+const SECTION_BODY = 'flex flex-col gap-3 px-4 py-3.5';
+const ABOUT_TEXT = 'm-0 font-serif text-body-small text-muted-foreground leading-normal';
+
+export function SidePanel({
+  colorPreset,
+  texturePreset,
+  onColorChange,
+  onTextureChange,
+}: SidePanelProps) {
   const [paperOpen, setPaperOpen] = useState(true);
   const [aboutOpen, setAboutOpen] = useState(true);
 
   return (
-    <div style={s.panel}>
+    <div className="absolute top-3 left-3 w-60 bg-popover border border-border shadow-elevation-low flex flex-col overflow-x-hidden overflow-y-auto max-h-[calc(100vh-42px-24px)]">
       {/* ── PAPER section ─────────────────────────────────────────────────── */}
       <SectionHeader title="Paper" open={paperOpen} onToggle={() => setPaperOpen((v) => !v)} />
 
       {paperOpen && (
-        <div style={s.sectionBody}>
+        <div className={SECTION_BODY}>
           {/* Texture row */}
-          <p style={s.subsectionLabel}>Texture</p>
-          <div style={s.textureRow}>
+          <p className={SUBSECTION_LABEL}>Texture</p>
+          <div className="flex gap-2">
             {TEXTURES.map((t) => (
               <button
                 key={t.id}
                 type="button"
-                style={s.textureBtn}
+                className="flex flex-col items-center gap-2 bg-transparent border-none p-0 cursor-pointer flex-1 min-w-0"
                 onClick={() => onTextureChange(t.id)}
               >
                 <LiveTextureSwatch profile={t} selected={texturePreset === t.id} />
-                <span style={s.textureLabel}>{t.label}</span>
+                <span className="font-serif text-footnote tracking-[0.04em] uppercase text-foreground text-center leading-[1.3] w-full whitespace-nowrap overflow-hidden text-ellipsis">
+                  {t.label}
+                </span>
               </button>
             ))}
           </div>
 
           {/* Colour row */}
-          <div style={s.colourSection}>
-            <p style={s.subsectionLabel}>Colour</p>
-            <div style={s.colorGrid}>
+          <div className="flex flex-col gap-2.5 pb-1">
+            <p className={SUBSECTION_LABEL}>Colour</p>
+            <div className="grid grid-cols-8 gap-1.5">
               {COLOR_PRESETS.map((preset) => (
                 <button
                   key={preset}
                   type="button"
                   title={preset}
                   onClick={() => onColorChange(preset)}
+                  className="w-full aspect-square border-none cursor-pointer p-0 transition-[outline] duration-[80ms]"
                   style={{
-                    ...s.colorSwatch,
-                    background: `var(--paper\\/${preset})`,
+                    background: `var(--color-${preset})`,
                     outline:
                       colorPreset === preset
-                        ? '2px solid var(--color\\/foreground)'
+                        ? '2px solid var(--color-foreground)'
                         : '1px solid rgba(46,41,38,0.2)',
                     outlineOffset: colorPreset === preset ? 2 : 0,
                   }}
@@ -146,18 +160,21 @@ export function SidePanel({ colorPreset, texturePreset, onColorChange, onTexture
       <SectionHeader title="About" open={aboutOpen} onToggle={() => setAboutOpen((v) => !v)} />
 
       {aboutOpen && (
-        <div style={{ ...s.sectionBody, ...s.aboutBody }}>
-          <p style={s.aboutText}>
+        <div className={`${SECTION_BODY} pb-5`}>
+          <p className={ABOUT_TEXT}>
             剪紙 Papercutting is a traditional folk art reimagined for the web. Fold, draw, and cut
             — then watch your design unfold into a beautiful symmetric pattern.
           </p>
-          <p style={s.aboutText}>
+          <p className={ABOUT_TEXT}>
             Share your creation with friends via a link, or print the folding guide to make your
             design tangible.
           </p>
-          <p style={s.madeBy}>
+          <p className="m-0 font-serif text-eyebrow tracking-eyebrow uppercase text-muted-foreground">
             made by{' '}
-            <a href={WEBSITE_TOMKWOK} style={s.link}>
+            <a
+              href={WEBSITE_TOMKWOK}
+              className="text-muted-foreground underline underline-offset-2"
+            >
               tom kwok
             </a>
           </p>
@@ -224,14 +241,11 @@ function LiveTextureSwatch({ profile, selected }: { profile: TextureProfile; sel
   return (
     <div
       ref={hostRef}
+      className="w-full h-[88px] overflow-hidden transition-[box-shadow,outline] duration-150"
       style={{
-        width: '100%',
-        height: 88,
-        overflow: 'hidden',
         boxShadow: selected ? 'var(--shadow-elevation-medium)' : 'var(--shadow-elevation-low)',
-        outline: selected ? '2px solid var(--color\\/foreground)' : 'none',
+        outline: selected ? '2px solid var(--color-foreground)' : 'none',
         outlineOffset: selected ? -2 : 0,
-        transition: 'box-shadow 150ms, outline 150ms',
       }}
     />
   );
@@ -249,171 +263,20 @@ function SectionHeader({
   onToggle: () => void;
 }) {
   return (
-    <div style={s.header}>
-      <span style={s.headerTitle}>{title}</span>
+    <div className="flex items-center justify-between px-4 h-10 border-b border-border flex-shrink-0">
+      <span className="font-serif text-label tracking-label uppercase text-foreground select-none">
+        {title}
+      </span>
       <button
         type="button"
-        style={s.toggleBtn}
+        className="flex items-center justify-center w-6 h-6 bg-background border border-border cursor-pointer p-0 text-foreground flex-shrink-0"
         onClick={onToggle}
         aria-label={open ? 'Collapse' : 'Expand'}
       >
-        <span
-          className="material-symbols-outlined"
-          style={{ fontSize: 16, lineHeight: 1, display: 'block' }}
-        >
+        <span className="material-symbols-outlined text-[16px] leading-none block">
           {open ? 'remove' : 'add'}
         </span>
       </button>
     </div>
   );
 }
-
-// ── Styles ────────────────────────────────────────────────────────────────────
-
-const s: Record<string, CSSProperties> = {
-  panel: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
-    width: 240,
-    background: 'var(--color\\/popover)',
-    border: '1px solid var(--color\\/border)',
-    boxShadow: 'var(--shadow-elevation-low)',
-    display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden',
-    maxHeight: 'calc(100vh - 42px - 24px)',
-    overflowY: 'auto',
-  },
-
-  header: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '0 16px',
-    height: 40,
-    borderBottom: '1px solid var(--color\\/border)',
-    flexShrink: 0,
-  },
-
-  headerTitle: {
-    fontFamily: 'var(--font\\/serif)',
-    fontSize: 'var(--typography\\/label\\/size)',
-    letterSpacing: 'var(--typography\\/label\\/letter-spacing)',
-    textTransform: 'uppercase',
-    color: 'var(--color\\/foreground)',
-    userSelect: 'none',
-  },
-
-  toggleBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 24,
-    height: 24,
-    background: 'var(--color\\/background)',
-    border: '1px solid var(--color\\/border)',
-    cursor: 'pointer',
-    padding: 0,
-    color: 'var(--color\\/foreground)',
-    flexShrink: 0,
-  },
-
-  sectionBody: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 12,
-    padding: '14px 16px',
-  },
-
-  subsectionLabel: {
-    margin: 0,
-    fontFamily: 'var(--font\\/serif)',
-    fontSize: 'var(--typography\\/label\\/size)',
-    letterSpacing: 'var(--typography\\/label\\/letter-spacing)',
-    textTransform: 'uppercase',
-    color: 'var(--color\\/muted-foreground)',
-    whiteSpace: 'nowrap',
-  },
-
-  textureRow: {
-    display: 'flex',
-    gap: 8,
-  },
-
-  textureBtn: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 8,
-    background: 'none',
-    border: 'none',
-    padding: 0,
-    cursor: 'pointer',
-    flex: 1,
-    minWidth: 0,
-  },
-
-  textureLabel: {
-    fontFamily: 'var(--font\\/serif)',
-    fontSize: 8,
-    letterSpacing: '0.04em',
-    textTransform: 'uppercase',
-    color: 'var(--color\\/foreground)',
-    textAlign: 'center',
-    lineHeight: 1.3,
-    width: '100%',
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  },
-
-  colourSection: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 10,
-    paddingBottom: 4,
-  },
-
-  colorGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(8, 1fr)',
-    gap: 6,
-  },
-
-  colorSwatch: {
-    width: '100%',
-    aspectRatio: '1 / 1',
-    border: 'none',
-    cursor: 'pointer',
-    padding: 0,
-    transition: 'outline 80ms',
-  },
-
-  aboutBody: {
-    paddingBottom: 20,
-  },
-
-  aboutText: {
-    margin: 0,
-    fontFamily: 'var(--font\\/serif)',
-    fontSize: 'var(--typography\\/body-small\\/size)',
-    color: 'var(--color\\/muted-foreground)',
-    lineHeight: 1.5,
-  },
-
-  madeBy: {
-    margin: 0,
-    fontFamily: 'var(--font\\/serif)',
-    fontSize: 'var(--typography\\/eyebrow\\/size)',
-    letterSpacing: 'var(--typography\\/eyebrow\\/letter-spacing)',
-    textTransform: 'uppercase',
-    color: 'var(--color\\/muted-foreground)',
-  },
-
-  link: {
-    color: 'var(--color\\/muted-foreground)',
-    textDecoration: 'underline',
-    textUnderlineOffset: 2,
-  },
-};

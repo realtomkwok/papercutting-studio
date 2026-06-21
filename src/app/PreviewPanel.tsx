@@ -3,33 +3,10 @@
  * the engine exposes a picture-in-picture render target; scales down on narrow viewports.
  */
 
-import type { CSSProperties } from 'react';
-
-const panel: CSSProperties = {
-  position: 'absolute',
-  top: 12,
-  right: 12,
-  width: 'min(240px, 28vw)',
-  aspectRatio: '1 / 1',
-  background: 'var(--color\\/card)',
-  border: '1px solid var(--color\\/border)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-};
-
-const label: CSSProperties = {
-  fontFamily: 'var(--font\\/serif)',
-  fontSize: 'var(--typography\\/button\\/size)',
-  letterSpacing: 'var(--typography\\/button\\/letter-spacing)',
-  textTransform: 'uppercase',
-  color: 'var(--color\\/border)',
-};
-
 export function PreviewPanel() {
   return (
-    <div style={panel}>
-      <span style={label}>Preview</span>
+    <div className="absolute top-3 right-3 w-[min(240px,28vw)] aspect-square bg-card border border-border flex items-center justify-center">
+      <span className="font-serif text-button tracking-button uppercase text-border">Preview</span>
     </div>
   );
 }

@@ -11,6 +11,7 @@
  * Switching screens just toggles the engine mode and swaps the surrounding chrome — no remount.
  */
 
+import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CanvasHost } from './CanvasHost';
 import { Toolbar } from './Toolbar';
@@ -43,7 +44,10 @@ function darkenHex(hex: string, factor = 0.82): string {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
-  const ch = (v: number) => Math.round(v * factor).toString(16).padStart(2, '0');
+  const ch = (v: number) =>
+    Math.round(v * factor)
+      .toString(16)
+      .padStart(2, '0');
   return `#${ch(r)}${ch(g)}${ch(b)}`;
 }
 
@@ -210,8 +214,10 @@ export function Studio() {
           engine.loadDesignState(parsed);
           handleApplyPaperStock(parsed.stock ?? {});
           if (parsed.toolParams) {
-            if (parsed.toolParams.stampSize !== undefined) handleStampSize(parsed.toolParams.stampSize);
-            if (parsed.toolParams.scissorsMargin !== undefined) handleScissorsMargin(parsed.toolParams.scissorsMargin);
+            if (parsed.toolParams.stampSize !== undefined)
+              handleStampSize(parsed.toolParams.stampSize);
+            if (parsed.toolParams.scissorsMargin !== undefined)
+              handleScissorsMargin(parsed.toolParams.scissorsMargin);
           }
           if (screen === 'preview') goToEditor();
         }
@@ -269,21 +275,46 @@ export function Studio() {
   // Fade strategy for the top bar (not over the canvas): full-coverage absolute wrappers are fine
   // since no canvas lives under them. visibility:hidden flips at the end of the transition so
   // buttons are non-interactive once invisible.
-  const barFadeBase: React.CSSProperties = { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, transition: 'opacity 250ms ease, visibility 250ms' };
-  const editorBarFade: React.CSSProperties = { ...barFadeBase, opacity: editorActive ? 1 : 0, visibility: editorActive ? 'visible' : 'hidden' };
-  const previewBarFade: React.CSSProperties = { ...barFadeBase, opacity: previewActive ? 1 : 0, visibility: previewActive ? 'visible' : 'hidden' };
+  const barFadeBase: React.CSSProperties = {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    transition: 'opacity 250ms ease, visibility 250ms',
+  };
+  const editorBarFade: React.CSSProperties = {
+    ...barFadeBase,
+    opacity: editorActive ? 1 : 0,
+    visibility: editorActive ? 'visible' : 'hidden',
+  };
+  const previewBarFade: React.CSSProperties = {
+    ...barFadeBase,
+    opacity: previewActive ? 1 : 0,
+    visibility: previewActive ? 'visible' : 'hidden',
+  };
   // Fade strategy for chrome OVER the canvas: zero-height wrappers (no position:absolute, so they
   // don't block the canvas hit region). The absolutely-positioned children (Toolbar, InstructionsCard
   // etc.) remain positioned relative to `main` — unchanged from before the wrappers existed.
   // visibility:hidden gates interactivity of the entire inactive subtree.
-  const chromeFadeBase: React.CSSProperties = { transition: 'opacity 250ms ease, visibility 250ms' };
-  const editorChromeFade: React.CSSProperties = { ...chromeFadeBase, opacity: editorActive ? 1 : 0, visibility: editorActive ? 'visible' : 'hidden' };
-  const previewChromeFade: React.CSSProperties = { ...chromeFadeBase, opacity: previewActive ? 1 : 0, visibility: previewActive ? 'visible' : 'hidden' };
+  const chromeFadeBase: React.CSSProperties = {
+    transition: 'opacity 250ms ease, visibility 250ms',
+  };
+  const editorChromeFade: React.CSSProperties = {
+    ...chromeFadeBase,
+    opacity: editorActive ? 1 : 0,
+    visibility: editorActive ? 'visible' : 'hidden',
+  };
+  const previewChromeFade: React.CSSProperties = {
+    ...chromeFadeBase,
+    opacity: previewActive ? 1 : 0,
+    visibility: previewActive ? 'visible' : 'hidden',
+  };
 
   return (
-    <div style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div className="w-full h-screen flex flex-col">
       {/* Top bar — both bars always mounted; fade between them */}
-      <div style={{ position: 'relative', height: 42, flexShrink: 0 }}>
+      <div className="relative h-[42px] flex-shrink-0">
         <div style={editorBarFade}>
           <TopBar
             onNew={handleNew}
@@ -298,25 +329,18 @@ export function Studio() {
           <PreviewTopBar onBack={goToEditor} onNew={handleNew} />
         </div>
       </div>
-      <main
-        style={{
-          flex: 1,
-          position: 'relative',
-          overflow: 'hidden',
-          minHeight: 0,
-        }}
-      >
+      <main className="flex-1 relative overflow-hidden min-h-0">
         {/* Paper texture background — absolute first child, naturally behind everything in DOM order */}
         <PaperShaderBg
           colorBack="#f5f2ef"
           colorFront="#e4dcd4"
           fiber={0.14}
-          fiberSize={0.20}
+          fiberSize={0.2}
           crumples={0.07}
-          crumpleSize={0.60}
+          crumpleSize={0.6}
           drops={0.06}
-          roughness={0.90}
-          contrast={0.20}
+          roughness={0.9}
+          contrast={0.2}
           worldSize={512}
         />
         {/* Line grid overlay — second absolute child, in front of shader but behind canvas */}
@@ -384,16 +408,12 @@ export function Studio() {
         onApply={handleApplyPaperStock}
         onClose={() => setPaperConfigOpen(false)}
       />
-      <SharePopup
-        open={shareOpen}
-        url={shareUrl}
-        onClose={() => setShareOpen(false)}
-      />
+      <SharePopup open={shareOpen} url={shareUrl} onClose={() => setShareOpen(false)} />
       <input
         ref={importInputRef}
         type="file"
         accept=".json"
-        style={{ display: 'none' }}
+        className="hidden"
         onChange={handleImportFile}
       />
       <PrintDialog

@@ -14,7 +14,9 @@
  * (exactly as Figma lays it out), so every icon keeps its true proportions instead of being shrunk
  * unevenly by object-fit.
  *
- * Token note: escaped-slash token names need a DOUBLE backslash in JS strings (`'var(--color\\/x)'`).
+ * Styling is Tailwind utilities for the static structure; the genuinely runtime values —
+ * elevation drop-shadow, lift transform, popover open/close transform, slider fill % — stay as
+ * inline styles since they're computed per render/state.
  */
 
 import { useState } from 'react';
@@ -25,18 +27,6 @@ import { PaperShaderBg } from './PaperShaderBg';
 import eraserIcon from '../assets/icons/tool-eraser.svg';
 import stampIcon from '../assets/icons/tool-stamp.svg';
 import scissorsIcon from '../assets/icons/tool-scissors.svg';
-
-const C = {
-  background: 'var(--color\\/background)',
-  card: 'var(--color\\/card)',
-  border: 'var(--color\\/border)',
-  foreground: 'var(--color\\/foreground)',
-  secondaryForeground: 'var(--color\\/secondary-foreground)',
-  input: 'var(--color\\/input)',
-} as const;
-
-const BAR_H = 92; // visible card band; fits the 80px undo/redo column
-const CONTAINER_H = 190; // clip bounds: band + room above for the hover tag / selected submenu
 
 export interface ToolbarProps {
   readonly activeTool: EngineTool;
@@ -56,9 +46,9 @@ export interface ToolbarProps {
 // ── tool art: tight-bbox frame + source SVG overflowing it via negative insets (Figma 35:84) ──
 type Art = { src: string; w: number; h: number; inset: [number, number, number, number] }; // inset %: T R B L
 const ART: Record<string, Art> = {
-  eraser:   { src: eraserIcon,   w: 65,  h: 104, inset: [-7, 0, -14, 0] },
-  stamp:    { src: stampIcon,    w: 87.6, h: 127, inset: [-7.95, -16.1, -14.25, -16.1] },
-  scissors: { src: scissorsIcon, w: 88,  h: 144, inset: [-2.66, -10.69, -9.33, -10.69] },
+  eraser: { src: eraserIcon, w: 65, h: 104, inset: [-7, 0, -14, 0] },
+  stamp: { src: stampIcon, w: 87.6, h: 127, inset: [-7.95, -16.1, -14.25, -16.1] },
+  scissors: { src: scissorsIcon, w: 88, h: 144, inset: [-2.66, -10.69, -9.33, -10.69] },
 };
 
 // ── per-tool config ──────────────────────────────────────────────────────────
@@ -71,59 +61,20 @@ type Entry =
 export const STAMP_TOOLS: readonly StampTool[] = ['circle', 'crescent', 'sawtooth', 'triangle'];
 
 const ENTRIES: Entry[] = [
-  { key: 'scissors', tool: 'scissors', label: 'scissors'
-    /* param: { tag: 'fit', min: -0.03, max: 0.03, step: 0.002 } — restore when submenu is ready */ },
-  { key: 'stamp', isStamp: true, label: 'stamp', param: { tag: 'size', min: 0.008, max: 0.06, step: 0.001 } },
+  {
+    key: 'scissors',
+    tool: 'scissors',
+    label: 'scissors',
+    /* param: { tag: 'fit', min: -0.03, max: 0.03, step: 0.002 } — restore when submenu is ready */
+  },
+  {
+    key: 'stamp',
+    isStamp: true,
+    label: 'stamp',
+    param: { tag: 'size', min: 0.008, max: 0.06, step: 0.001 },
+  },
   { key: 'eraser', tool: 'erase', label: 'eraser' },
 ];
-
-// ── shared styles ────────────────────────────────────────────────────────────
-const clipContainer: CSSProperties = {
-  position: 'absolute',
-  bottom: 0,
-  left: '50%',
-  transform: 'translateX(-50%)',
-  width: 'max-content',
-  height: CONTAINER_H,
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'flex-end',
-};
-
-const band: CSSProperties = {
-  height: BAR_H,
-  display: 'flex',
-  alignItems: 'center',
-  gap: 'var(--sds-size-space-1200)',
-  position: 'relative',
-  borderTop: `1px solid ${C.border}`,
-  borderLeft: `1px solid ${C.border}`,
-  borderRight: `1px solid ${C.border}`,
-};
-
-// marginLeft -1 overlaps the buttons' left border onto the band's, collapsing the doubled edge line.
-const undoRedoCol: CSSProperties = { display: 'flex', flexDirection: 'column', flexShrink: 0, alignSelf: 'center', marginLeft: -1, position: 'relative', zIndex: 1 };
-const toolRow: CSSProperties = { display: 'flex', gap: 9, alignItems: 'center', flexShrink: 0, alignSelf: 'center', position: 'relative', zIndex: 1 };
-
-const slotWrap: CSSProperties = {
-  width: 120,
-  height: BAR_H,
-  flexShrink: 0,
-  position: 'relative',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-};
-
-const toolButton: CSSProperties = {
-  background: 'transparent',
-  border: 'none',
-  padding: 0,
-  cursor: 'pointer',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-};
 
 // Three elevation levels following the physical tool analogy:
 //   active (resting)  = medium elevation: tool sitting on the shelf
@@ -171,82 +122,59 @@ function liftFor(state: 'active' | 'hover' | 'selected'): string {
   }
 }
 
-const ART_MOTION: CSSProperties = { transition: 'filter 180ms ease, transform 180ms ease', willChange: 'filter, transform' };
-
-function popover(interactive: boolean, visible: boolean): CSSProperties {
+/** Open/close transform + opacity for a floating popover (submenu or tooltip). Runtime-computed. */
+function popoverStyle(interactive: boolean, visible: boolean): CSSProperties {
   return {
-    position: 'absolute',
-    left: '50%',
-    bottom: 134,
     transform: visible ? 'translate(-50%, 0)' : 'translate(-50%, 8px)',
     opacity: visible ? 1 : 0,
-    zIndex: 2,
     pointerEvents: interactive && visible ? 'auto' : 'none',
-    transition: 'opacity 160ms ease, transform 160ms ease',
   };
 }
 
 function ToolArt({ art }: { art: Art }) {
   const [t, r, b, l] = art.inset;
   return (
-    <div style={{ width: art.w, height: art.h, position: 'relative' }}>
-      <div style={{ position: 'absolute', top: `${t}%`, right: `${r}%`, bottom: `${b}%`, left: `${l}%` }}>
-        <img src={art.src} alt="" draggable={false} style={{ display: 'block', width: '100%', height: '100%', maxWidth: 'none' }} />
+    <div className="relative" style={{ width: art.w, height: art.h }}>
+      <div
+        className="absolute"
+        style={{ top: `${t}%`, right: `${r}%`, bottom: `${b}%`, left: `${l}%` }}
+      >
+        <img src={art.src} alt="" draggable={false} className="block w-full h-full max-w-none" />
       </div>
     </div>
   );
 }
 
 // ── parameter submenu (functional slider — Figma 75:680) ─────────────────────
-const tagText: CSSProperties = {
-  fontFamily: 'var(--font\\/serif)',
-  fontSize: 'var(--typography\\/button\\/size)',
-  letterSpacing: 'var(--typography\\/button\\/letter-spacing)',
-  textTransform: 'uppercase',
-  color: C.secondaryForeground,
-  whiteSpace: 'nowrap',
-};
-const minMaxText: CSSProperties = {
-  fontFamily: 'var(--font\\/serif)',
-  fontSize: 'var(--typography\\/button-small\\/size)',
-  letterSpacing: 'var(--typography\\/button-small\\/letter-spacing)',
-  textTransform: 'uppercase',
-  color: C.foreground,
-};
-
-function Slider({ value, min, max, step, onChange }: { value: number; min: number; max: number; step: number; onChange: (v: number) => void }) {
+function Slider({
+  value,
+  min,
+  max,
+  step,
+  onChange,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+}) {
   const pct = max > min ? Math.min(1, Math.max(0, (value - min) / (max - min))) : 0;
   return (
-    <div style={{ width: 268, height: 24, display: 'flex', alignItems: 'center', gap: 12, padding: '0 16px' }}>
-      <span style={minMaxText}>MIN</span>
-      <div style={{ flex: 1, height: 24, position: 'relative', display: 'flex', alignItems: 'center' }}>
-        <div style={{ flex: 1, height: 40, position: 'relative' }}>
-          <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 10, transform: 'translateY(-50%)', background: C.input, borderRadius: 4 }} />
+    <div className="w-[268px] h-6 flex items-center gap-3 px-4">
+      <span className="font-serif text-button-small tracking-button-small uppercase text-foreground">
+        MIN
+      </span>
+      <div className="flex-1 h-6 relative flex items-center">
+        <div className="flex-1 h-10 relative">
+          <div className="absolute top-1/2 left-0 right-0 h-2.5 -translate-y-1/2 bg-input rounded" />
           <div
-            style={{
-              position: 'absolute',
-              top: '50%',
-              left: 0,
-              width: `${pct * 100}%`,
-              height: 10,
-              transform: 'translateY(-50%)',
-              background: C.foreground,
-              borderTopLeftRadius: 4,
-              borderBottomLeftRadius: 4,
-            }}
+            className="absolute top-1/2 left-0 h-2.5 -translate-y-1/2 bg-foreground rounded-l"
+            style={{ width: `${pct * 100}%` }}
           />
           <div
-            style={{
-              position: 'absolute',
-              top: '50%',
-              left: `calc(${pct * 100}% - 12px)`,
-              width: 24,
-              height: 40,
-              transform: 'translateY(-50%)',
-              background: C.foreground,
-              border: `1px solid ${C.border}`,
-              borderRadius: 4,
-            }}
+            className="absolute top-1/2 w-6 h-10 -translate-y-1/2 bg-foreground border border-border rounded"
+            style={{ left: `calc(${pct * 100}% - 12px)` }}
           />
         </div>
         <input
@@ -256,10 +184,12 @@ function Slider({ value, min, max, step, onChange }: { value: number; min: numbe
           step={step}
           value={value}
           onChange={(ev) => onChange(Number(ev.target.value))}
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', margin: 0, opacity: 0, cursor: 'pointer' }}
+          className="absolute inset-0 w-full h-full m-0 opacity-0 cursor-pointer"
         />
       </div>
-      <span style={minMaxText}>MAX</span>
+      <span className="font-serif text-button-small tracking-button-small uppercase text-foreground">
+        MAX
+      </span>
     </div>
   );
 }
@@ -300,7 +230,15 @@ function StampShapeIcon({ kind }: { kind: StampTool }) {
 }
 
 // ── shape picker button (20×20, toggled fill when selected) ───────────────────
-function ShapePicker({ shape, selected, onClick }: { shape: StampTool; selected: boolean; onClick: () => void }) {
+function ShapePicker({
+  shape,
+  selected,
+  onClick,
+}: {
+  shape: StampTool;
+  selected: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
@@ -308,20 +246,10 @@ function ShapePicker({ shape, selected, onClick }: { shape: StampTool; selected:
       aria-label={shape}
       aria-pressed={selected}
       onClick={onClick}
-      style={{
-        width: 20,
-        height: 20,
-        padding: 0,
-        background: selected ? C.foreground : C.card,
-        border: `1px solid ${C.border}`,
-        borderRadius: 4,
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: selected ? C.background : C.foreground,
-        flexShrink: 0,
-      }}
+      className={
+        'w-5 h-5 p-0 border border-border rounded cursor-pointer flex items-center justify-center flex-shrink-0 ' +
+        (selected ? 'bg-foreground text-background' : 'bg-card text-foreground')
+      }
     >
       <StampShapeIcon kind={shape} />
     </button>
@@ -331,23 +259,13 @@ function ShapePicker({ shape, selected, onClick }: { shape: StampTool; selected:
 // ── shared tag-label chip (expand_content icon + label, Figma "Tooltip" section) ──
 function TagChip({ label }: { label: string }) {
   return (
-    <div
-      style={{
-        height: 24,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 4,
-        padding: 4,
-        background: C.card,
-        border: `1px solid ${C.border}`,
-        flexShrink: 0,
-      }}
-    >
-      <span className="material-symbols-outlined" style={{ fontSize: 20, color: C.secondaryForeground }}>
+    <div className="h-6 flex items-center justify-center gap-1 p-1 bg-card border border-border flex-shrink-0">
+      <span className="material-symbols-outlined text-[20px] text-secondary-foreground">
         expand_content
       </span>
-      <span style={tagText}>{label}</span>
+      <span className="font-serif text-button tracking-button uppercase text-secondary-foreground whitespace-nowrap">
+        {label}
+      </span>
     </div>
   );
 }
@@ -366,15 +284,20 @@ function Submenu({
   onStampShape?: (s: StampTool) => void;
 }) {
   return (
-    <div style={{ height: 24, display: 'flex', alignItems: 'center', background: C.background, border: `1px solid ${C.border}` }}>
+    <div className="h-6 flex items-center bg-background border border-border">
       <TagChip label={param.tag} />
       <Slider value={value} min={param.min} max={param.max} step={param.step} onChange={onChange} />
       {stampShape !== undefined && onStampShape && (
         <>
           <TagChip label="shapes" />
-          <div style={{ display: 'flex', gap: 4, alignItems: 'center', padding: '0 4px', flexShrink: 0 }}>
+          <div className="flex gap-1 items-center px-1 flex-shrink-0">
             {STAMP_TOOLS.map((s) => (
-              <ShapePicker key={s} shape={s} selected={s === stampShape} onClick={() => onStampShape(s)} />
+              <ShapePicker
+                key={s}
+                shape={s}
+                selected={s === stampShape}
+                onClick={() => onStampShape(s)}
+              />
             ))}
           </div>
         </>
@@ -406,9 +329,11 @@ export function Toolbar(props: ToolbarProps) {
     return art ? <ToolArt art={art} /> : null;
   };
 
+  // clip container: bottom-anchored, h190 leaves room above the h92 band for tooltip / submenu
   return (
-    <div style={clipContainer}>
-      <div style={band}>
+    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-max h-[190px] flex flex-col justify-end">
+      {/* card band — gap-12 (48px) fits the 80px undo/redo column */}
+      <div className="h-[92px] flex items-center gap-12 relative border-t border-l border-r border-border">
         {/* Paper texture background for the toolbar band */}
         <PaperShaderBg
           colorBack="#eae2dc"
@@ -422,14 +347,29 @@ export function Toolbar(props: ToolbarProps) {
           contrast={0.22}
           worldSize={256}
         />
-        {/* Undo / redo column — shared Button (icon, disabled state) */}
-        <div style={undoRedoCol}>
-          <Button type="icon" icon="undo" title="Undo" ariaLabel="Undo" disabled={!canUndo} onClick={onUndo} style={{ marginBottom: -1 }} />
-          <Button type="icon" icon="redo" title="Redo" ariaLabel="Redo" disabled={!canRedo} onClick={onRedo} />
+        {/* Undo / redo column — marginLeft -1 overlaps the buttons' border onto the band's */}
+        <div className="flex flex-col flex-shrink-0 self-center -ml-px relative z-[1]">
+          <Button
+            type="icon"
+            icon="undo"
+            title="Undo"
+            ariaLabel="Undo"
+            disabled={!canUndo}
+            onClick={onUndo}
+            style={{ marginBottom: -1 }}
+          />
+          <Button
+            type="icon"
+            icon="redo"
+            title="Redo"
+            ariaLabel="Redo"
+            disabled={!canRedo}
+            onClick={onRedo}
+          />
         </div>
 
         {/* Tool row */}
-        <div style={toolRow}>
+        <div className="flex gap-[9px] items-center flex-shrink-0 self-center relative z-[1]">
           {ENTRIES.map((e) => {
             const isSelected = e.isStamp ? isStampActive : !!e.tool && activeTool === e.tool;
             const isHovered = hovered === e.key;
@@ -438,17 +378,24 @@ export function Toolbar(props: ToolbarProps) {
             // tool is active even when the cursor has moved away from the toolbar.
             const showTag = !showSubmenu && (isSelected || isHovered);
             // Elevation order: idle (lightest) → selected (medium) → hovered (strongest).
-            const state: 'active' | 'hover' | 'selected' = isHovered ? 'hover' : isSelected ? 'selected' : 'active';
+            const state: 'active' | 'hover' | 'selected' = isHovered
+              ? 'hover'
+              : isSelected
+                ? 'selected'
+                : 'active';
             const shadow = shadowFor(state);
             return (
               <div
                 key={e.key}
-                style={slotWrap}
+                className="w-[120px] h-[92px] flex-shrink-0 relative flex items-center justify-center"
                 onPointerEnter={() => setHovered(e.key)}
                 onPointerLeave={() => setHovered((h) => (h === e.key ? null : h))}
               >
                 {e.param && (
-                  <div style={popover(true, showSubmenu)}>
+                  <div
+                    className="absolute left-1/2 bottom-[134px] z-[2] transition-[opacity,transform] duration-[160ms] ease-[ease]"
+                    style={popoverStyle(true, showSubmenu)}
+                  >
                     <Submenu
                       param={e.param}
                       value={paramValue(e)}
@@ -458,12 +405,15 @@ export function Toolbar(props: ToolbarProps) {
                     />
                   </div>
                 )}
-                <div style={popover(false, showTag)}>
+                <div
+                  className="absolute left-1/2 bottom-[134px] z-[2] transition-[opacity,transform] duration-[160ms] ease-[ease]"
+                  style={popoverStyle(false, showTag)}
+                >
                   <Tooltip label={e.label} />
                 </div>
                 <button
                   type="button"
-                  style={toolButton}
+                  className="bg-transparent border-none p-0 cursor-pointer flex items-center justify-center"
                   title={e.label}
                   aria-label={e.label}
                   aria-pressed={isSelected}
@@ -472,7 +422,12 @@ export function Toolbar(props: ToolbarProps) {
                     else if (e.tool) onTool(e.tool);
                   }}
                 >
-                  <div style={{ ...ART_MOTION, filter: shadow, transform: liftFor(state) }}>{renderInner(e.key)}</div>
+                  <div
+                    className="transition-[filter,transform] duration-[180ms] ease-[ease] will-change-[filter,transform]"
+                    style={{ filter: shadow, transform: liftFor(state) }}
+                  >
+                    {renderInner(e.key)}
+                  </div>
                 </button>
               </div>
             );

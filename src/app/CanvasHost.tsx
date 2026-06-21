@@ -16,10 +16,5 @@ export function CanvasHost({ engine }: { engine: EditorEngine }) {
     return () => engine.dispose();
   }, [engine]);
 
-  return (
-    <div
-      ref={ref}
-      style={{ position: 'relative', width: '100%', height: '100%', minHeight: 480 }}
-    />
-  );
+  return <div ref={ref} className="relative w-full h-full min-h-[480px]" />;
 }

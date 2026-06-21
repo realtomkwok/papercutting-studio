@@ -3,6 +3,7 @@ import tseslint from '@typescript-eslint/eslint-plugin';
 import tsparser from '@typescript-eslint/parser';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
+import globals from 'globals';
 
 export default [
   { ignores: ['dist', 'node_modules', 'coverage'] },
@@ -14,30 +15,9 @@ export default [
       ecmaVersion: 2022,
       sourceType: 'module',
       globals: {
-        window: 'readonly',
-        document: 'readonly',
-        navigator: 'readonly',
-        URL: 'readonly',
-        URLSearchParams: 'readonly',
-        KeyboardEvent: 'readonly',
-        WheelEvent: 'readonly',
-        btoa: 'readonly',
-        atob: 'readonly',
-        console: 'readonly',
-        setTimeout: 'readonly',
-        clearTimeout: 'readonly',
-        requestAnimationFrame: 'readonly',
-        cancelAnimationFrame: 'readonly',
-        performance: 'readonly',
-        Blob: 'readonly',
-        Image: 'readonly',
-        HTMLElement: 'readonly',
-        HTMLDivElement: 'readonly',
-        HTMLCanvasElement: 'readonly',
-        HTMLImageElement: 'readonly',
-        CanvasRenderingContext2D: 'readonly',
-        CSSStyleDeclaration: 'readonly',
-        ResizeObserver: 'readonly',
+        ...globals.browser,
+        // TypeScript-only DOM lib types (not runtime globals, absent from globals.browser)
+        GenericTransformStream: 'readonly',
       },
     },
     plugins: {
